@@ -1,10 +1,6 @@
-name: Build CS2-MapChangeStopTV
+name: Build CS2-Plugin
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+on: [push, pull_request]
 
 jobs:
   build:
@@ -16,16 +12,16 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x # CS2 插件目前多使用 .NET 8
+        dotnet-version: 8.0.x
 
     - name: Restore dependencies
       run: dotnet restore
 
-    - name: Build Plugin
+    - name: Build
       run: dotnet build --configuration Release --no-restore
 
-    - name: Upload Artifact
+    - name: Upload DLL
       uses: actions/upload-artifact@v4
       with:
-        name: CS2-MapChangeStopTV-Binary
-        path: bin/Release/net8.0/CS2MapChangeStopTV.dll
+        name: CS2MapChangeStopTV-Binary
+        path: bin/Release/net8.0/*.dll
