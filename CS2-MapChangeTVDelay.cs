@@ -68,8 +68,19 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTV>
 
         RegisterEventHandler<EventCsWinPanelMatch>((e, i) =>
         {
-            LogDebug("Recording stopped because of EventCsWinPanelMatch");
-            StopRecord();
+            // 當結算面板 (Win Panel) 出現時，啟動 5 秒計時器
+            // 這 5 秒剛好夠錄完 MVP 動畫與最終比分，然後在投票 UI 變得明顯前切斷
+            LogDebug("Win Panel 顯示中，將在 5 秒後停止錄影並斷開 CSTV。");
+
+            AddTimer(5.0f, () => 
+            {
+                if (isRecording)
+                {
+                    LogDebug("5 秒已到，正式執行 tv_stoprecord。");
+                    StopRecord();
+                }
+            });
+
             return HookResult.Continue;
         });
         RegisterEventHandler<EventRoundStart>((e, i) =>
