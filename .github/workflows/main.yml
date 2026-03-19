@@ -1,0 +1,31 @@
+name: Build CS2-MapChangeStopTV
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x # CS2 插件目前多使用 .NET 8
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build Plugin
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: CS2-MapChangeStopTV-Binary
+        path: bin/Release/net8.0/CS2MapChangeStopTV.dll
