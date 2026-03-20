@@ -35,9 +35,9 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTV>
         // 2. 監聽比賽結束事件 (官方 UI 出現後 5 秒強行切斷)
         RegisterEventHandler<EventCsWinPanelMatch>((e, i) =>
         {
-            LogDebug("結算面板已顯示，將在 5 秒後強制攔截並關閉所有錄影。");
+            LogDebug("結算面板已顯示，將在 4 秒後強制攔截並關閉所有錄影。");
 
-            AddTimer(5.0f, () => 
+            AddTimer(4.0f, () => 
             {
                 StopRecord();
             });
