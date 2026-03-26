@@ -11,7 +11,7 @@ namespace CS2MapChangeStopTV;
 public class MapChangeStopTVConfig : BasePluginConfig
 {
     [JsonPropertyName("Debug")] public bool Debug { get; set; } = true;
-    [JsonPropertyName("MapChangeCooldown")] public float MapChangeCooldown { get; set; } = 120.0f; // 換圖後 120 秒內禁止換圖
+    [JsonPropertyName("MapChangeCooldown")] public float MapChangeCooldown { get; set; } = 180.0f; // 換圖後 180 秒內禁止換圖
 }
 
 public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTVConfig>
@@ -63,7 +63,7 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTVConfi
         RegisterEventHandler<EventCsWinPanelMatch>((e, i) =>
         {
             LogDebug("結算面板已顯示，1.0 秒後執行暴力卸載程序...");
-            AddTimer(1.0f, ForceShutdownTV);
+            AddTimer(0.3f, ForceShutdownTV);
             return HookResult.Continue;
         });
 
@@ -114,7 +114,7 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTVConfi
             float timeLeft = Config.MapChangeCooldown - (float)secondsSinceStart;
             
             // 給在線的管理員提示
-            player.PrintToChat($" [\x04系統訊息\x01] \x01換圖保護中！請等待 \x04{timeLeft:F0} \x01秒後再使用 \x02.map\x01。");
+            player.PrintToChat($" [\x04系統訊息\x01] \x01換圖保護中！請等待 \x04{timeLeft:F0} \x01秒後再使用 \x04換圖指令\x01。");
 
             LogDebug($"攔截玩家 {player.PlayerName} 指令：冷卻剩餘 {timeLeft:F0} 秒");
             return HookResult.Handled; 
