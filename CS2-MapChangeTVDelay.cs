@@ -36,7 +36,7 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTVConfi
             _lastMapStartTime = DateTime.Now; 
             LogDebug($"地圖 {mapName} 開始，進入 {Config.MapChangeCooldown} 秒保護期。");
 
-            AddTimer(5.0f, () => 
+            AddTimer(7.0f, () => 
             {
                 Server.ExecuteCommand("sv_voiceenable 1"); 
                 Server.ExecuteCommand("tv_enable 1");      
