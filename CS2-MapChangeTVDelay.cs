@@ -8,52 +8,66 @@ using CounterStrikeSharp.API.Modules.Timers;
 
 namespace CS2MapChangeStopTV;
 
-public class MapChangeStopTV : BasePluginConfig
+public class MapChangeStopTVConfig : BasePluginConfig
 {
     [JsonPropertyName("Debug")] public bool Debug { get; set; } = true;
+    [JsonPropertyName("MapChangeCooldown")] public float MapChangeCooldown { get; set; } = 120.0f; // 換圖後 120 秒內禁止換圖
 }
 
-public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTV>
+public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTVConfig>
 {
     public override string ModuleName => "CS2-MapChangeStopTV-UltimateFix";
-    public override string ModuleVersion => "0.0.9"; // 針對 Log 訊息加入語音緩衝清理
+    public override string ModuleVersion => "0.1.2"; // MatchZy 攔截鎖定版
     public override string ModuleAuthor => "Letaryat & Gemini";
     
-    public required MapChangeStopTV Config { get; set; }
-    public void OnConfigParsed(MapChangeStopTV config) { Config = config; }
+    public required MapChangeStopTVConfig Config { get; set; }
+    private DateTime _lastMapStartTime; // 紀錄地圖載入完成的時間點
+
+    public void OnConfigParsed(MapChangeStopTVConfig config) { Config = config; }
 
     public override void Load(bool hotReload)
     {
-        LogDebug("CS2-MapChangeStopTV (暴力修復版 v0.0.9) - Loaded");
+        LogDebug($"CS2-MapChangeStopTV {ModuleVersion} - 載入成功");
+        _lastMapStartTime = DateTime.Now;
 
-        // 1. 解決「換圖不讀 cfg」：新地圖載入後，手動開回所有模組
+        // 1. 地圖啟動邏輯：重設計時器並恢復環境
         RegisterListener<OnMapStart>(mapName =>
         {
-            // 延遲 5 秒，避開地圖載入最忙碌的瞬間
+            _lastMapStartTime = DateTime.Now; // 重啟 120 秒計時
+            LogDebug($"地圖 {mapName} 開始，進入 {Config.MapChangeCooldown} 秒保護期。");
+
             AddTimer(5.0f, () => 
             {
-                Server.ExecuteCommand("sv_voiceenable 1"); // 恢復語音
-                Server.ExecuteCommand("tv_enable 1");      // 恢復 GOTV
-                Server.ExecuteCommand("tv_broadcast 0");   // 確保廣播保持關閉 (預防 #311)
+                Server.ExecuteCommand("sv_voiceenable 1"); 
+                Server.ExecuteCommand("tv_enable 1");      
+                Server.ExecuteCommand("tv_broadcast 0");   
                 LogDebug("新地圖載入：已強行恢復 TV 與 語音模組。");
             });
         });
 
-        // 2. 攔截換圖指令
+        // 2. 攔截原生換圖指令 (RCON / 控制台)
         AddCommandListener("changelevel", ListenerChangeLevel, HookMode.Pre);
         AddCommandListener("map", ListenerChangeLevel, HookMode.Pre);
         AddCommandListener("host_workshop_map", ListenerChangeLevel, HookMode.Pre);
         AddCommandListener("ds_workshop_changelevel", ListenerChangeLevel, HookMode.Pre);
 
-        // 3. 監聽比賽結束事件 (攔截點)
+        // 3. 【核心】攔截 MatchZy 的 .map 指令 (透過監聽聊天框)
+        AddCommandListener("say", ListenerChatCommand, HookMode.Pre);
+        AddCommandListener("say_team", ListenerChatCommand, HookMode.Pre);
+        
+        // 4. 攔截 MatchZy 底層指令 (防止管理員直接用控制台命令)
+        AddCommandListener("css_map", ListenerChangeLevel, HookMode.Pre);
+        AddCommandListener("css_workshop", ListenerChangeLevel, HookMode.Pre);
+
+        // 5. 監聽比賽結束
         RegisterEventHandler<EventCsWinPanelMatch>((e, i) =>
         {
-            LogDebug("結算面板已顯示，0.1 秒後執行暴力卸載程序...");
+            LogDebug("結算面板已顯示，1.0 秒後執行暴力卸載程序...");
             AddTimer(1.0f, ForceShutdownTV);
             return HookResult.Continue;
         });
 
-        // 4. 監聽地圖結束 (最後一道防線)
+        // 6. 地圖結束最後防線
         RegisterListener<OnMapEnd>(ForceShutdownTV);
     }
 
@@ -62,9 +76,49 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTV>
         ForceShutdownTV();
     }
 
+    // 處理聊天框的 .map / !map
+    public HookResult ListenerChatCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player == null) return HookResult.Continue;
+
+        // 取得聊天內容並清理空白
+        string msg = info.GetArg(1).Trim().ToLower();
+
+        // 如果開頭是 MatchZy 的換圖符號
+        if (msg.StartsWith(".map") || msg.StartsWith("!map"))
+        {
+            return CheckCooldownAndProcess(player);
+        }
+
+        return HookResult.Continue;
+    }
+
+    // 處理控制台直接輸入的換圖指令
     public HookResult ListenerChangeLevel(CCSPlayerController? player, CommandInfo info)
     {
-        LogDebug("偵測到換圖指令，立即清空環境...");
+        return CheckCooldownAndProcess(player);
+    }
+
+    // 統一的時間檢查邏輯
+    private HookResult CheckCooldownAndProcess(CCSPlayerController? player)
+    {
+        double secondsSinceStart = (DateTime.Now - _lastMapStartTime).TotalSeconds;
+
+        if (secondsSinceStart < Config.MapChangeCooldown)
+        {
+            float timeLeft = Config.MapChangeCooldown - (float)secondsSinceStart;
+            
+            if (player != null)
+            {
+                // 給管理員明確的提示
+                player.PrintToChat($" \x02[ T W ] \x01換圖保護中！請等待 \x04{timeLeft:F0} \x01秒後再使用 \x02.map\x01。");
+            }
+
+            LogDebug($"攔截換圖指令：冷卻中 (剩餘 {timeLeft:F0} 秒)");
+            return HookResult.Handled; // 徹底擋下指令，MatchZy 不會收到
+        }
+
+        LogDebug("冷卻已過，執行換圖前置清理...");
         ForceShutdownTV();
         return HookResult.Continue;
     }
@@ -77,20 +131,10 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTV>
 
     public void ForceShutdownTV()
     {
-        // 根據你的 Log 顯示，CHLTVServer 和 CPlayerVoiceListener 是閃退前的最後訊息
-        
-        // 1. 停止錄影
         Server.ExecuteCommand("tv_stoprecord");
-        
-        // 2. 關閉廣播
         Server.ExecuteCommand("tv_broadcast 0");
-
-        // 3. 【新增】提前關閉語音：預防 Log 中的 PostSpawnGroupUnload 死鎖
         Server.ExecuteCommand("sv_voiceenable 0");
-        
-        // 4. 【核心】提前殺掉 TV 模組：預防 CHLTVServer::Shutdown 撞車
         Server.ExecuteCommand("tv_enable 0");
-        
         LogDebug("環境已清空：錄影、廣播、語音、TV 模組已全數強行卸載。");
     }
 }
