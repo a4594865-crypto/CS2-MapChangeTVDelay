@@ -36,9 +36,8 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTVConfi
             _lastMapStartTime = DateTime.Now; 
             LogDebug($"地圖 {mapName} 開始，進入 {Config.MapChangeCooldown} 秒保護期。");
 
-            AddTimer(7.0f, () => 
+            AddTimer(10.0f, () => 
             {
-                Server.ExecuteCommand("sv_voiceenable 1"); 
                 Server.ExecuteCommand("tv_enable 1");      
                 Server.ExecuteCommand("tv_broadcast 0");   
                 LogDebug("新地圖載入：已強行恢復 TV 與 語音模組。");
@@ -63,7 +62,7 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTVConfi
         RegisterEventHandler<EventCsWinPanelMatch>((e, i) =>
         {
             LogDebug("結算面板已顯示，1.0 秒後執行暴力卸載程序...");
-            AddTimer(0.3f, ForceShutdownTV);
+            AddTimer(1.0f, ForceShutdownTV);
             return HookResult.Continue;
         });
 
@@ -135,7 +134,6 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTVConfi
     {
         Server.ExecuteCommand("tv_stoprecord");
         Server.ExecuteCommand("tv_broadcast 0");
-        Server.ExecuteCommand("sv_voiceenable 0");
         Server.ExecuteCommand("tv_enable 0");
         LogDebug("環境已清空：錄影、廣播、語音、TV 模組已全數強行卸載。");
     }
