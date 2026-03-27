@@ -62,7 +62,7 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTVConfi
         RegisterEventHandler<EventCsWinPanelMatch>((e, i) =>
         {
             LogDebug("結算面板已顯示，1.0 秒後執行暴力卸載程序...");
-            AddTimer(1.0f, ForceShutdownTV);
+            AddTimer(0.1f, ForceShutdownTV);
             return HookResult.Continue;
         });
 
