@@ -114,7 +114,7 @@ public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTVConfi
             float timeLeft = Config.MapChangeCooldown - (float)secondsSinceStart;
             
             // 給在線的管理員提示
-            player.PrintToChat($" [\x04系統訊息\x01] \x01換圖保護中！請等待 \x04{timeLeft:F0} \x01秒後再使用 \x04換圖指令\x01。");
+            player.PrintToChat($" [\x04系統訊息\x01] \x01換圖緩衝保護中！請等待 \x04{timeLeft:F0} \x01秒後再使用 \x04換圖指令\x01。");
 
             LogDebug($"攔截玩家 {player.PlayerName} 指令：冷卻剩餘 {timeLeft:F0} 秒");
             return HookResult.Handled; 
