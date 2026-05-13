@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "1.8.4";
+    public override string ModuleVersion => "1.8.5";
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     
@@ -40,7 +40,7 @@ public class OneVOneReset : BasePlugin
             return HookResult.Continue;
         });
 
-        // --- 處理：換隊 / 跳觀戰 (優化判定邏輯) ---
+        // --- 處理：換隊 / 跳觀戰 ---
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
             if (@event.Userid == null || !@event.Userid.IsValid || _isMatchEnded || _isResetting) 
@@ -53,23 +53,33 @@ public class OneVOneReset : BasePlugin
             // 邏輯：如果原本在打球 (CT:3, T:2)，現在去了觀戰 (1) 或無隊伍 (0)
             if (oldTeam > 1 && newTeam <= 1)
             {
-                // 1. 遊戲內公告 (第一行訊息立刻噴出)
-                Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰 比 賽 已 中 止");
+                // 【核心修正】先獲取遊戲規則判斷是否為熱身
+                var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+                bool isWarmup = gameRules?.WarmupPeriod ?? false;
 
-                // 2. 【延遲顯示】：設定在 4.0 秒後才顯示第二行提醒
-                AddTimer(4.0f, () => {
-                    Server.PrintToChatAll($"{_prefix}請下一組玩家輸入 \x10!R \x01重新對戰開始");
-                });
-                
-                // 3. 黑視窗紀錄
-                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 觀戰或離開，比賽已中止。");
+                if (!isWarmup)
+                {
+                    // 只有非熱身模式才發送聊天訊息
+                    Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰 比 賽 已 中 止");
 
-                // 觸發人數檢查
+                    AddTimer(4.0f, () => {
+                        if (!_isResetting && !_isMatchEnded)
+                            Server.PrintToChatAll($"{_prefix}請下一組玩家輸入 \x10!R \x01重新對戰開始");
+                    });
+
+                    Console.WriteLine($"[1V1 Log] 玩家 {playerName} 觀戰，比賽已中止。");
+                }
+                else
+                {
+                    // 熱身模式時僅在後台紀錄，不發送聊天訊息
+                    Console.WriteLine($"[1V1 Log] 玩家 {playerName} 於熱身期間切換觀戰，跳過提示。");
+                }
+
+                // 觸發人數檢查 (HandlePlayerLeave 內部已有 Warmup 檢查)
                 AddTimer(1.0f, () => HandlePlayerLeave(playerName, false));
             }
             else if (oldTeam > 1 && newTeam > 1)
             {
-                // 單純 CT/T 互換
                 AddTimer(0.2f, () => HandlePlayerLeave(playerName, false)); 
             }
             
@@ -91,7 +101,6 @@ public class OneVOneReset : BasePlugin
     {
         if (_isResetting || _isMatchEnded) return;
 
-        // 偵測打球人數
         int activeCount = Utilities.GetPlayers().Count(p => 
             p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3)
         );
@@ -103,7 +112,6 @@ public class OneVOneReset : BasePlugin
 
             double secondsSinceLastReset = (DateTime.Now - _lastResetTime).TotalSeconds;
 
-            // --- 情況 1：斷線且場上剩 1 人 (執行 360s 冷卻檢查) ---
             if (isDisconnect && activeCount == 1)
             {
                 if (secondsSinceLastReset < CooldownSeconds)
@@ -114,7 +122,6 @@ public class OneVOneReset : BasePlugin
                 }
             }
 
-            // --- 情況 2：執行重啟 (斷線且過冷卻，或是場上完全沒人) ---
             if (isDisconnect || activeCount == 0)
             {
                 _isResetting = true;
@@ -122,6 +129,7 @@ public class OneVOneReset : BasePlugin
 
                 if (activeCount == 0)
                 {
+                    // 空城重置不再噴聊天訊息，只在 Console 紀錄
                     Console.WriteLine($"[1V1 Log] 檢測到場上已無玩家，5 秒後執行自動清理重置。");
                 }
                 else
