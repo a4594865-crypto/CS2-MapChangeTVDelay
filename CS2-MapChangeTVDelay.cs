@@ -122,7 +122,7 @@ public class OneVOneReset : BasePlugin
 
                 if (activeCount == 0)
                 {
-                    Server.PrintToChatAll($"{_prefix}場上已無玩家，伺服器將在 \x10 5 秒\x01 後自動重置...");
+                    Console.WriteLine($"[1V1 Log] 檢測到場上已無玩家，5 秒後執行自動清理重置。");
                 }
                 else
                 {
