@@ -54,15 +54,15 @@ public class OneVOneReset : BasePlugin
             if (oldTeam > 1 && newTeam <= 1)
             {
                 // 1. 遊戲內公告 (第一行訊息立刻噴出)
-                Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰  比賽已中止");
+                Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰  \x10比賽已中止");
 
-                // 2. 【延遲顯示】：設定在 3.0 秒後才顯示第二行提醒
-                AddTimer(3.0f, () => {
+                // 2. 【延遲顯示】：設定在 4.0 秒後才顯示第二行提醒
+                AddTimer(4.0f, () => {
                     Server.PrintToChatAll($"{_prefix}請下一組玩家輸入 \x10!R \x01重新對戰開始");
                 });
                 
                 // 3. 黑視窗紀錄
-                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 換隊，已觸發延遲 3 秒提醒。");
+                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 切 換 到 觀 戰，比賽已中止。");
 
                 // 觸發人數檢查
                 AddTimer(1.0f, () => HandlePlayerLeave(playerName, false));
