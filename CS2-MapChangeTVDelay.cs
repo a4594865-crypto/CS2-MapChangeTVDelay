@@ -21,7 +21,7 @@ public class OneVOneReset : BasePlugin
     // 這樣每次地圖換好，這個時間都會重新刷成「當下時間」
     private DateTime _lastResetTime = DateTime.MinValue;
     
-    private const int CooldownSeconds = 240;
+    private const int CooldownSeconds = 360;
 
     public override void Load(bool hotReload)
     {
