@@ -62,7 +62,7 @@ public class OneVOneReset : BasePlugin
                 });
                 
                 // 3. 黑視窗紀錄
-                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 切 換 到 觀 戰，比賽已中止。");
+                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 觀戰或離開，比賽已中止。");
 
                 // 觸發人數檢查
                 AddTimer(1.0f, () => HandlePlayerLeave(playerName, false));
