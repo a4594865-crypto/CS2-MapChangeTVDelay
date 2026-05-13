@@ -7,77 +7,64 @@ namespace OneVOneReset;
 
 public class OneVOneReset : BasePlugin
 {
-    public override string ModuleName => "1V1 斷線5秒絕對強制重啟";
-    public override string ModuleVersion => "2.1.0";
+    public override string ModuleName => "1V1 斷線/觀戰5秒絕對重啟";
+    public override string ModuleVersion => "1.6.0";
 
+    // 定義顏色前綴
     private readonly string _prefix = " [\x06 1 v 1 對 戰 模 式 \x06] \x01";
+    
+    // 防止 5 秒內多次觸發重啟邏輯
     private bool _isResetting = false;
 
     public override void Load(bool hotReload)
     {
-        // 1. 監控玩家斷線 (事件 A)
+        // 1. 監控玩家斷線
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
-            TriggerResetCheck();
+            // 延遲一點點，確保統計時玩家已離開
+            AddTimer(0.2f, () => HandlePlayerLeave());
             return HookResult.Continue;
         });
 
-        // 2. 監控玩家離開 (更底層的 Hook)
-        RegisterListener<Listeners.OnClientDisconnect>(slot =>
-        {
-            TriggerResetCheck();
-        });
-
-        // 3. 監控玩家換隊 (包含跳觀戰)
+        // 2. 監控玩家換隊 (跳觀戰也包含在此)
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
-            // 如果玩家是從 T(2) 或 CT(3) 換走
-            if (@event.Oldteam == 2 || @event.Oldteam == 3)
+            // 如果玩家原本在 T(2) 或 CT(3)
+            if (@event.Oldteam > 1) 
             {
-                TriggerResetCheck();
+                // 跳觀戰那一秒 TeamNum 尚未更新，必須延遲 0.2s 檢查人數才準確
+                AddTimer(0.2f, () => HandlePlayerLeave());
             }
             return HookResult.Continue;
         });
     }
 
-    private void TriggerResetCheck()
-    {
-        // 延遲 0.5 秒再檢查，確保伺服器已經把離開的人踢出列表，統計才會精確
-        AddTimer(0.5f, () => {
-            CheckAndReset();
-        });
-    }
-
-    private void CheckAndReset()
+    private void HandlePlayerLeave()
     {
         var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
         if (gameRules == null) return;
 
-        // 如果你希望「離開遊戲」一定要重啟，建議保留此判斷以防載入死循環
-        // 但如果你的伺服器熱身結束得很快，可以考慮註解掉這行
+        // 如果在熱身，不執行重載
         if (gameRules.WarmupPeriod) return;
 
+        // 如果已經在倒數中，就不重複執行
         if (_isResetting) return;
 
-        // 重新統計對戰席上的真人
-        // 這次加入 Connected 狀態檢查，確保斷線的人不被算入
+        // 統計目前在對戰位 (T/CT) 的真人數量
         var activePlayers = Utilities.GetPlayers().Where(p => 
-            p != null && 
-            p.IsValid && 
-            !p.IsBot && 
-            p.TeamNum > 1 && // 必須在 T 或 CT
-            p.Connected == PlayerConnectedState.All // 必須是完全連線狀態
+            p != null && p.IsValid && !p.IsBot && (p.TeamNum == 2 || p.TeamNum == 3)
         ).ToList();
 
-        // 只要對戰席的人少於 2 位 (有人跳觀戰或離開遊戲)
+        // 只要對戰席人數不足 2 (有人斷線或跳觀戰了)
         if (activePlayers.Count < 2)
         {
             _isResetting = true;
 
+            // 使用自定義的前綴發送訊息
             Server.PrintToChatAll($"{_prefix} \x02偵測到選手離開 (斷線/觀戰)，比賽中止。");
-            Server.PrintToChatAll($"{_prefix} \x01伺服器將在\x02 5 秒\x01 後強制重啟地圖...");
-
-            AddTimer(7.0f, () => {
+            Server.PrintToChatAll($"{_prefix} \x01伺服器將在 \x025 秒\x01 後「強制重載地圖」...");
+            
+            AddTimer(5.0f, () => {
                 ExecuteForceReset();
             });
         }
@@ -85,10 +72,17 @@ public class OneVOneReset : BasePlugin
 
     private void ExecuteForceReset()
     {
-        // 徹底重置指令
+        // 清除備份，防止回合分數留存
         Server.ExecuteCommand("mp_backup_restore_load_autobackup 0");
+        
+        // 強制重載當前工作坊地圖，重置所有插件 (含 SLAYER)
         Server.ExecuteCommand($"ds_workshop_changelevel {Server.MapName}");
+
+        // 確保載入後為熱身狀態
         Server.ExecuteCommand("mp_warmup_start");
         Server.ExecuteCommand("mp_warmup_pausetimer 1");
+        
+        // 重載地圖後 _isResetting 會重置
+        _isResetting = false;
     }
 }
