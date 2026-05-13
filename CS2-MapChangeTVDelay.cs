@@ -64,7 +64,7 @@ public class OneVOneReset : BasePlugin
 
                     AddTimer(4.0f, () => {
                         if (!_isResetting && !_isMatchEnded)
-                            Server.PrintToChatAll($"{_prefix}請下一組玩家輸入 \x10!R \x01重新對戰開始");
+                            Server.PrintToChatAll($"{_prefix}請 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
                     });
 
                     Console.WriteLine($"[1V1 Log] 玩家 {playerName} 觀戰，比賽已中止。");
