@@ -1,93 +1,57 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Modules.Commands;
-using static CounterStrikeSharp.API.Core.Listeners;
-using Microsoft.Extensions.Logging;
-using System.Text.Json.Serialization;
-using CounterStrikeSharp.API.Modules.Timers;
+using CounterStrikeSharp.API.Modules.Utils;
+using System.Linq;
 
-namespace CS2MapChangeStopTV;
+namespace OneVOneReset;
 
-public class MapChangeStopTV : BasePluginConfig
+public class OneVOneReset : BasePlugin
 {
-    [JsonPropertyName("Debug")] public bool Debug { get; set; } = true;
-}
-
-public class CS2MapChangeStopTV : BasePlugin, IPluginConfig<MapChangeStopTV>
-{
-    public override string ModuleName => "CS2-MapChangeStopTV-UltimateFix";
-    public override string ModuleVersion => "0.0.9"; // 針對 Log 訊息加入語音緩衝清理
-    public override string ModuleAuthor => "Letaryat & Gemini";
-    
-    public required MapChangeStopTV Config { get; set; }
-    public void OnConfigParsed(MapChangeStopTV config) { Config = config; }
+    public override string ModuleName => "1V1 斷線強制恢復熱身";
+    public override string ModuleVersion => "1.0.0";
 
     public override void Load(bool hotReload)
     {
-        LogDebug("CS2-MapChangeStopTV (暴力修復版 v0.0.9) - Loaded");
-
-        // 1. 解決「換圖不讀 cfg」：新地圖載入後，手動開回所有模組
-        RegisterListener<OnMapStart>(mapName =>
+        // 監控玩家斷線（離開伺服器）
+        RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
-            // 延遲 5 秒，避開地圖載入最忙碌的瞬間
-            AddTimer(5.0f, () => 
-            {
-                Server.ExecuteCommand("sv_voiceenable 1"); // 恢復語音
-                Server.ExecuteCommand("tv_enable 1");      // 恢復 GOTV
-                Server.ExecuteCommand("tv_broadcast 0");   // 確保廣播保持關閉 (預防 #311)
-                LogDebug("新地圖載入：已強行恢復 TV 與 語音模組。");
-            });
-        });
-
-        // 2. 攔截換圖指令
-        AddCommandListener("changelevel", ListenerChangeLevel, HookMode.Pre);
-        AddCommandListener("map", ListenerChangeLevel, HookMode.Pre);
-        AddCommandListener("host_workshop_map", ListenerChangeLevel, HookMode.Pre);
-        AddCommandListener("ds_workshop_changelevel", ListenerChangeLevel, HookMode.Pre);
-
-        // 3. 監聽比賽結束事件 (攔截點)
-        RegisterEventHandler<EventCsWinPanelMatch>((e, i) =>
-        {
-            LogDebug("結算面板已顯示，0.1 秒後執行暴力卸載程序...");
-            AddTimer(0.1f, ForceShutdownTV);
+            // 延遲 1 秒執行，確保系統已經把離開的人移出名單
+            AddTimer(1.0f, CheckPlayersAndReset);
             return HookResult.Continue;
         });
 
-        // 4. 監聽地圖結束 (最後一道防線)
-        RegisterListener<OnMapEnd>(ForceShutdownTV);
+        // 監控玩家換隊（有人換到觀戰位也視同離開比賽）
+        RegisterEventHandler<EventPlayerTeam>((@event, info) =>
+        {
+            AddTimer(1.0f, CheckPlayersAndReset);
+            return HookResult.Continue;
+        });
     }
 
-    public override void Unload(bool hotReload)
+    private void CheckPlayersAndReset()
     {
-        ForceShutdownTV();
-    }
+        // 1. 抓取目前在 T(2) 或 CT(3) 的真人玩家（排除 Bot）
+        var activePlayers = Utilities.GetPlayers().Where(p => 
+            p.IsValid && 
+            !p.IsBot && 
+            (p.TeamNum == 2 || p.TeamNum == 3)
+        ).ToList();
 
-    public HookResult ListenerChangeLevel(CCSPlayerController? player, CommandInfo info)
-    {
-        LogDebug("偵測到換圖指令，立即清空環境...");
-        ForceShutdownTV();
-        return HookResult.Continue;
-    }
+        // 2. 如果場上能打的人少於 2 個
+        if (activePlayers.Count < 2)
+        {
+            // 3. 執行「暴力還原」指令
+            // mp_restartgame 1：強制終止目前卡住的回合（這是解決你卡回合問題的藥方）
+            Server.ExecuteCommand("mp_restartgame 1");
+            
+            // mp_warmup_start：立刻開啟熱身模式
+            Server.ExecuteCommand("mp_warmup_start");
+            
+            // mp_warmup_pausetimer 1：讓熱身時間無限長，不要自動開始
+            Server.ExecuteCommand("mp_warmup_pausetimer 1");
 
-    public void LogDebug(string message)
-    {
-        if (Config.Debug == false) { return; }
-        Logger.LogInformation($"[StopTV-Fix] {message}");
-    }
-
-    public void ForceShutdownTV()
-    {
-        // 根據你的 Log 顯示，CHLTVServer 和 CPlayerVoiceListener 是閃退前的最後訊息
-        
-        // 1. 停止錄影
-        Server.ExecuteCommand("tv_stoprecord");
-        
-        // 2. 關閉廣播
-        Server.ExecuteCommand("tv_broadcast 0");
-        
-        // 4. 【核心】提前殺掉 TV 模組：預防 CHLTVServer::Shutdown 撞車
-        Server.ExecuteCommand("tv_enable 0");
-        
-        LogDebug("環境已清空：錄影、廣播、語音、TV 模組已全數強行卸載。");
+            // 在聊天室提醒剩下的那個人
+            Server.PrintToChatAll(" \x02[1V1] 偵測到選手不足，已自動終止比賽並恢復熱身狀態。");
+        }
     }
 }
