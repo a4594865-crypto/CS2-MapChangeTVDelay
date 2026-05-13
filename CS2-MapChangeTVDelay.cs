@@ -2,63 +2,74 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace OneVOneReset;
 
 public class OneVOneReset : BasePlugin
 {
-    public override string ModuleName => "1V1 斷線5秒絕對重啟 (工作坊優化版)";
-    public override string ModuleVersion => "1.5.0";
+    public override string ModuleName => "1V1 斷線10秒精確認人重啟";
+    public override string ModuleVersion => "1.8.0";
+
+    private readonly string _prefix = " \x06[ \x041 v 1 對 戰 模 式 \x06] \x01";
+    
+    // 用來儲存斷線那一刻，原本場上「所有」玩家的 SteamID
+    private List<ulong> _originalMatchPlayers = new();
 
     public override void Load(bool hotReload)
     {
-        // 1. 監控玩家斷線
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
-            HandlePlayerLeave();
+            HandleMatchDisruption();
             return HookResult.Continue;
         });
 
-        // 2. 監控玩家換隊 (換到觀戰視同離開)
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
-            if (@event.Oldteam > 1) 
-            {
-                HandlePlayerLeave();
-            }
+            if (@event.Oldteam > 1) HandleMatchDisruption();
             return HookResult.Continue;
         });
     }
 
-    private void HandlePlayerLeave()
+    private void HandleMatchDisruption()
     {
-        // 獲取遊戲規則
         var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+        if (gameRules == null || gameRules.WarmupPeriod) return;
 
-        if (gameRules == null) return;
+        // 【紀錄關鍵人物】
+        // 找出目前還在場上的真人
+        var currentActive = Utilities.GetPlayers()
+            .Where(p => p.IsValid && !p.IsBot && (p.TeamNum == 2 || p.TeamNum == 3))
+            .ToList();
 
-        // 【辨識狀態】如果是熱身模式，直接跳過（不影響準備階段）
-        if (gameRules.WarmupPeriod)
+        // 如果剩下不到 2 人，開始 10 秒認人倒數
+        if (currentActive.Count < 2)
         {
-            return;
-        }
+            // 紀錄下這場比賽「目前剩下的這幾個人」的 SteamID
+            _originalMatchPlayers = currentActive.Select(p => p.SteamID).ToList();
 
-        // 【人數檢查】統計 T 和 CT 的真人數量 (排除 Bot)
-        var activePlayers = Utilities.GetPlayers().Where(p => 
-            p.IsValid && !p.IsBot && (p.TeamNum == 2 || p.TeamNum == 3)
-        ).ToList();
-
-        // 如果比賽中人數少於 2 人，執行暴力重啟
-        if (activePlayers.Count < 2)
-        {
-            Server.PrintToChatAll(" \x06[ \x041 v 1 對 戰 模 式 \x06] \x01 偵測到玩家離開，比賽中斷。");
-            Server.PrintToChatAll(" \x06[ \x041 v 1 對 戰 模 式 \x06] \x01 玩家10秒內伺服器將在 5 秒後「重新載入地圖」。");
+            Server.PrintToChatAll($"{_prefix} 偵測到玩家離開，比賽中斷。");
+            Server.PrintToChatAll($"{_prefix} 等待原玩家重連，\x02 10 秒 \x01 後檢查身份...");
             
-            AddTimer(5.0f, () => {
-                // 再次確認人數，避免 5 秒內有人連回來
-                var finalCheck = Utilities.GetPlayers().Count(p => p.IsValid && !p.IsBot && (p.TeamNum == 2 || p.TeamNum == 3));
-                if (finalCheck < 2)
+            AddTimer(10.0f, () => {
+                // 取得 10 秒後，現在場上的真人
+                var nowPlayers = Utilities.GetPlayers()
+                    .Where(p => p.IsValid && !p.IsBot && (p.TeamNum == 2 || p.TeamNum == 3))
+                    .ToList();
+
+                // 【精確判定邏輯】
+                // 1. 人數必須回到 2 人
+                // 2. 原本留下來的那個人 (_originalMatchPlayers) 必須還在場上
+                bool isPeopleEnough = nowPlayers.Count >= 2;
+                bool isOriginalStayedPlayerStillHere = _originalMatchPlayers.All(id => nowPlayers.Any(p => p.SteamID == id));
+
+                if (isPeopleEnough && isOriginalStayedPlayerStillHere)
                 {
+                    Server.PrintToChatAll($"{_prefix} 原玩家已就位，比賽繼續。");
+                }
+                else
+                {
+                    // 如果原本的人走了，或者 10 秒後人還是不夠，直接重啟
                     ExecuteForceReset();
                 }
             });
@@ -67,14 +78,8 @@ public class OneVOneReset : BasePlugin
 
     private void ExecuteForceReset()
     {
-        // 1. 終止比賽自動恢復機制 (解決回合數/分數留著的問題)
         Server.ExecuteCommand("mp_backup_restore_load_autobackup 0");
-        
-        // 2. 使用工作坊專用指令強制重啟地圖
-        // 這會導致所有插件 (含 SLAYER) 卸載並重新載入，徹底洗掉計時器
         Server.ExecuteCommand($"ds_workshop_changelevel {Server.MapName}");
-
-        // 3. 備份機制：確保載入後進入熱身模式
         Server.ExecuteCommand("mp_warmup_start");
         Server.ExecuteCommand("mp_warmup_pausetimer 1");
     }
