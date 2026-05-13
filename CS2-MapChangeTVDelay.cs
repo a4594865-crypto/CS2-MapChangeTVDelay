@@ -10,18 +10,17 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "1.8.0";
+    public override string ModuleVersion => "1.8.1";
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     
     private bool _isResetting = false;
     private bool _isMatchEnded = false;
     private DateTime _lastResetTime = DateTime.MinValue;
-    private const int CooldownSeconds = 360;
+    private const int CooldownSeconds = 360; // 已改為 360 秒
 
     public override void Load(bool hotReload)
     {
-        // 進入新地圖時，立刻標記時間，啟動 120 秒保護盾
         _lastResetTime = DateTime.Now;
 
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
@@ -38,24 +37,26 @@ public class OneVOneReset : BasePlugin
             if (@event.Userid == null || _isMatchEnded || _isResetting) return HookResult.Continue;
             
             string playerName = @event.Userid.PlayerName;
-            // true 代表是斷線，會去判斷是否執行 ExecuteForceReset
             AddTimer(1.5f, () => HandlePlayerLeave(playerName, true)); 
             return HookResult.Continue;
         });
 
-        // --- 處理：換隊/跳觀戰 (僅提示訊息，不自動換圖) ---
+        // --- 處理：換隊/跳觀戰 (僅提示訊息，並印到黑視窗) ---
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
             if (@event.Userid == null || _isMatchEnded || _isResetting) return HookResult.Continue;
 
-            // 如果玩家原本在 CT/T (Oldteam > 1) 且現在換到觀戰 (Team == 1)
             if (@event.Oldteam > 1 && @event.Team == 1)
             {
                 string playerName = @event.Userid.PlayerName;
+                
+                // 1. 印到遊戲內聊天室
                 Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰  比賽已中止");
                 Server.PrintToChatAll($"{_prefix}請下一組玩家輸入 \x10!R \x01重新對戰開始");
+
+                // 2. 印到伺服器黑視窗 (Console)
+                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 切換到觀戰，比賽中止。");
             }
-            // 如果不是換到觀戰（例如換隊打球），則走一般檢查
             else if (@event.Oldteam > 1)
             {
                 string playerName = @event.Userid.PlayerName;
@@ -84,18 +85,15 @@ public class OneVOneReset : BasePlugin
             p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3)
         );
 
-        // 如果場上人數不足 2 人
         if (activeCount < 2)
         {
             var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
             if (gameRules == null || gameRules.WarmupPeriod) return;
 
-            // 只有「斷線 (Disconnect)」才會觸發 5 秒後自動 ds_workshop_changelevel
             if (isDisconnect)
             {
                 double secondsSinceLastReset = (DateTime.Now - _lastResetTime).TotalSeconds;
                 
-                // 冷卻保護檢查
                 if (secondsSinceLastReset < CooldownSeconds)
                 {
                     int remaining = CooldownSeconds - (int)secondsSinceLastReset;
@@ -106,8 +104,12 @@ public class OneVOneReset : BasePlugin
                 _isResetting = true;
                 _lastResetTime = DateTime.Now;
 
+                // 遊戲內訊息
                 Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 離開 (\x10 斷 線 \x01) 比賽中止");
                 Server.PrintToChatAll($"{_prefix}伺服器將在 \x10 5 秒\x01 後「重新重置啟動」...");
+
+                // 黑視窗紀錄
+                Console.WriteLine($"[1V1 Log] 偵測到玩家 {playerName} 斷線，觸發自動重置流程。");
                 
                 AddTimer(6.0f, () => { ExecuteForceReset(); });
             }
