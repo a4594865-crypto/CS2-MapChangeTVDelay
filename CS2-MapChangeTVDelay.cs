@@ -81,9 +81,9 @@ public class OneVOneReset : BasePlugin
         {
             _isResetting = true;
 
-            string reason = isManual ? " \x04手動要求重置\x01 " : " 離開 (\x04 斷 線 / 觀 戰 \x01)";
-            Server.PrintToChatAll($"{_prefix}玩家 \x04{playerName}\x01{reason}，比賽中止。");
-            Server.PrintToChatAll($"{_prefix}伺服器將在 \x04 5 秒\x01 後「將重新啟動」...");
+            string reason = isManual ? " \x04手動要求重置\x01 " : " 離開 (\x10 斷 線 / 觀 戰 \x01)";
+            Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01{reason}，比賽中止。");
+            Server.PrintToChatAll($"{_prefix}伺服器將在 \x10 5 秒\x01 後「將重新啟動」...");
             
             AddTimer(5.0f, () => {
                 ExecuteForceReset();
