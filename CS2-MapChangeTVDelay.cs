@@ -69,7 +69,7 @@ public class OneVOneReset : BasePlugin
             Server.PrintToChatAll($"{_prefix}玩家 \x04{playerName}\x01 離開 (\x04 斷 線 / 觀 戰 \x01)，比賽中止。");
             Server.PrintToChatAll($"{_prefix}伺服器將在 \x04 5 秒\x01 後「強制重載地圖」...");
             
-            AddTimer(5.0f, () => {
+            AddTimer(7.0f, () => {
                 ExecuteForceReset();
             });
         }
