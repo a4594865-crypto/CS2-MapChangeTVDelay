@@ -75,7 +75,7 @@ public class OneVOneReset : BasePlugin
         {
             int remaining = CooldownSeconds - (int)secondsSinceLastReset;
             // 這裡提示訊息微調，讓玩家知道是剛換圖受保護
-            Server.PrintToChatAll($"{_prefix} \x10系統保護 \x01冷卻中，請等待 \x04{remaining}\x01 秒或下一組輸入 \x10!R \x01重新開始");
+            Server.PrintToChatAll($"{_prefix} \x10重啟 \x01冷卻中，請等待 \x04{remaining}\x01 秒 或輸入 \x10!R \x01重新開始");
             return;
         }
 
