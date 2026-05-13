@@ -54,7 +54,7 @@ public class OneVOneReset : BasePlugin
             if (oldTeam > 1 && newTeam <= 1)
             {
                 // 1. 遊戲內公告 (第一行訊息立刻噴出)
-                Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰  \x10比賽已中止");
+                Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰 比 賽 已 中 止");
 
                 // 2. 【延遲顯示】：設定在 4.0 秒後才顯示第二行提醒
                 AddTimer(4.0f, () => {
