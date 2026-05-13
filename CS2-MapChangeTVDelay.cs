@@ -51,8 +51,8 @@ public class OneVOneReset : BasePlugin
         // 如果比賽中人數少於 2 人，執行暴力重啟
         if (activePlayers.Count < 2)
         {
-            Server.PrintToChatAll(" \x02[1V1系統] 偵測到選手離開，比賽中斷。");
-            Server.PrintToChatAll(" \x02[1V1系統] 伺服器將在 5 秒後「重新載入地圖」以重置所有插件。");
+            Server.PrintToChatAll(" \x06[ \x041 v 1 對 戰 模 式 \x06] \x01 偵測到玩家離開，比賽中斷。");
+            Server.PrintToChatAll(" \x06[ \x041 v 1 對 戰 模 式 \x06] \x01 玩家10秒內伺服器將在 5 秒後「重新載入地圖」。");
             
             AddTimer(5.0f, () => {
                 // 再次確認人數，避免 5 秒內有人連回來
