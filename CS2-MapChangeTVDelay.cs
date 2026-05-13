@@ -21,7 +21,7 @@ public class OneVOneReset : BasePlugin
     // 這樣每次地圖換好，這個時間都會重新刷成「當下時間」
     private DateTime _lastResetTime = DateTime.MinValue;
     
-    private const int CooldownSeconds = 180;
+    private const int CooldownSeconds = 240;
 
     public override void Load(bool hotReload)
     {
@@ -75,7 +75,7 @@ public class OneVOneReset : BasePlugin
         {
             int remaining = CooldownSeconds - (int)secondsSinceLastReset;
             // 這裡提示訊息微調，讓玩家知道是剛換圖受保護
-            Server.PrintToChatAll($"{_prefix} \x10系統保護 \x01重啟冷卻中，請等待 \x04{remaining}\x01 秒。");
+            Server.PrintToChatAll($"{_prefix} \x10系統保護 \x01冷卻中，請等待 \x04{remaining}\x01 秒或下一組輸入 \x10!R \x01重新開始");
             return;
         }
 
