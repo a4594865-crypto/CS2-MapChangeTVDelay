@@ -20,7 +20,7 @@ public class OneVOneReset : BasePlugin
     // --- 新增：記錄上一次成功執行重啟的時間 ---
     private static DateTime _lastResetTime = DateTime.MinValue;
     // 設定冷卻秒數（例如 60 秒）
-    private const int CooldownSeconds = 60;
+    private const int CooldownSeconds = 120;
 
     public override void Load(bool hotReload)
     {
@@ -71,7 +71,7 @@ public class OneVOneReset : BasePlugin
         {
             // 如果還在冷卻中，噴出提示並直接結束，不執行重啟
             int remaining = CooldownSeconds - (int)secondsSinceLastReset;
-            Server.PrintToChatAll($"{_prefix} \x02[防惡意保護] \x01重啟冷卻中，請等待 \x04{remaining}\x01 秒。");
+            Server.PrintToChatAll($"{_prefix} \x10系統保護 \x01重啟冷卻中 ，請等待 \x04{remaining}\x01 秒。");
             return;
         }
 
@@ -89,7 +89,7 @@ public class OneVOneReset : BasePlugin
             _lastResetTime = DateTime.Now;
 
             Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 離開 (\x10 斷 線 / 觀 戰 \x01) 比賽中止");
-            Server.PrintToChatAll($"{_prefix}伺服器將在 \x10 5 秒\x01 後「重新啟動重置」...");
+            Server.PrintToChatAll($"{_prefix}伺服器將在 \x10 5 秒\x01 後「重新重置啟動」...");
             
             AddTimer(6.0f, () => 
             {
