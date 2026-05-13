@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "1.8.7";
+    public override string ModuleVersion => "1.8.8";
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     
@@ -39,15 +39,15 @@ public class OneVOneReset : BasePlugin
             var player = @event.Userid;
             string playerName = player.PlayerName;
             
-            // 【核心修正點】：判斷斷線的人原本在哪一隊
-            // 如果是在 觀戰席(1) 或 無隊伍(0) 斷線，則不觸發任何重啟邏輯
+            // 如果是在 觀戰席(1) 或 無隊伍(0) 斷線，不觸發重啟邏輯
             if (player.TeamNum <= 1) 
             {
-                Console.WriteLine($"[1V1 Log] {playerName} 切換到觀戰，已中止比賽。");
+                // 只在黑視窗靜默紀錄
+                Console.WriteLine($"[1V1 Log] 觀戰者 {playerName} 離開伺服器，忽略重啟判定。");
                 return HookResult.Continue;
             }
 
-            // 只有對戰中的人斷線，才進入 HandlePlayerLeave
+            Console.WriteLine($"[1V1 Log] 對戰玩家 {playerName} 斷線，進入重啟判定。");
             AddTimer(1.5f, () => HandlePlayerLeave(playerName, true)); 
             return HookResult.Continue;
         });
@@ -63,6 +63,7 @@ public class OneVOneReset : BasePlugin
             int oldTeam = @event.Oldteam;
             int newTeam = @event.Team;
 
+            // 邏輯：從對戰席 (2, 3) 離開到 非對戰席 (0, 1)
             if (oldTeam > 1 && newTeam <= 1)
             {
                 var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
@@ -70,21 +71,27 @@ public class OneVOneReset : BasePlugin
 
                 if (!isWarmup)
                 {
-                    int remainingActiveCount = Utilities.GetPlayers().Count(p => 
-                        p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && 
-                        (p.TeamNum == 2 || p.TeamNum == 3) && p.Slot != player.Slot
-                    );
+                    // 延遲 0.1 秒，等伺服器完成隊伍切換後計算剩餘人數
+                    AddTimer(0.1f, () => {
+                        int activeCount = Utilities.GetPlayers().Count(p => 
+                            p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3)
+                        );
 
-                    if (remainingActiveCount < 2)
-                    {
-                        Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 切 換 到 \x10觀 戰 \x01比 賽 已 中 止");
-                        AddTimer(4.0f, () => {
-                            if (!_isResetting && !_isMatchEnded)
-                                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
-                        });
-                    }
+                        // 如果走掉之後，對戰席剩下不到 2 人
+                        if (activeCount < 2)
+                        {
+                            Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 切 換 到 \x10觀 戰 \x01比 賽 已 中 止");
+                            Console.WriteLine($"[1V1 Log] {playerName} 切換到觀戰，比賽中止");
+
+                            AddTimer(4.0f, () => {
+                                if (!_isResetting && !_isMatchEnded)
+                                    Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
+                            });
+                        }
+                    });
                 }
-                AddTimer(1.0f, () => HandlePlayerLeave(playerName, false));
+                // 執行 HandlePlayerLeave (內部會處理空城重啟)
+                AddTimer(1.2f, () => HandlePlayerLeave(playerName, false));
             }
             return HookResult.Continue;
         });
@@ -118,11 +125,13 @@ public class OneVOneReset : BasePlugin
 
             if (activeCount == 0)
             {
-                Console.WriteLine($"[1V1 Log] 場上已無玩家，執行自動清理重置。");
+                // 空城重啟，在黑視窗印出 LOG
+                Console.WriteLine($"[1V1 Log] 檢測到場上已無對戰玩家，準備執行自動地圖重置。");
                 shouldReset = true;
             }
             else if (isDisconnect && activeCount == 1)
             {
+                // 斷線重啟
                 if (secondsSinceLastReset >= CooldownSeconds)
                 {
                     Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 離 開 (\x10 斷 線 \x01) 比 賽 中 止");
@@ -132,7 +141,8 @@ public class OneVOneReset : BasePlugin
                 else
                 {
                     int remaining = CooldownSeconds - (int)secondsSinceLastReset;
-                    Server.PrintToChatAll($"{_prefix} \x10重啟 \x01冷卻中，剩餘 \x04{remaining}\x01 秒。");
+                    Server.PrintToChatAll($"{_prefix} \x101重啟 \x0冷卻中，剩餘 \x04{remaining}\x01 秒。");
+                    Console.WriteLine($"[1V1 Log] {playerName} 斷線，但重啟冷卻中。");
                 }
             }
 
@@ -140,7 +150,7 @@ public class OneVOneReset : BasePlugin
             {
                 _isResetting = true;
                 _lastResetTime = DateTime.Now;
-                Console.WriteLine($"[1V1 Log] 執行自動重置。觸發者: {playerName}");
+                Console.WriteLine($"[1V1 Log] 執行地圖更換命令 (ds_workshop_changelevel)。");
                 AddTimer(6.0f, () => { ExecuteForceReset(); });
             }
         }
@@ -155,5 +165,6 @@ public class OneVOneReset : BasePlugin
         
         _isResetting = false;
         _isMatchEnded = false;
+        Console.WriteLine($"[1V1 Log] 地圖重置完成。");
     }
 }
