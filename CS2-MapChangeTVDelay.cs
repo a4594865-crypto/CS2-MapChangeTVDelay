@@ -141,7 +141,7 @@ public class OneVOneReset : BasePlugin
                 else
                 {
                     int remaining = CooldownSeconds - (int)secondsSinceLastReset;
-                    Server.PrintToChatAll($"{_prefix} \x101重啟 \x0冷卻中，剩餘 \x04{remaining}\x01 秒。");
+                    Server.PrintToChatAll($"{_prefix} \x10重啟 \x0冷卻中，剩餘 \x04{remaining}\x01 秒。");
                     Console.WriteLine($"[1V1 Log] {playerName} 斷線，但重啟冷卻中。");
                 }
             }
