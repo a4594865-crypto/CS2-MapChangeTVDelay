@@ -52,7 +52,7 @@ public class OneVOneReset : BasePlugin
                     // 如果地圖名包含 workshop 字樣，通常需要確保路徑正確
                     // 在 CS2 中，最保險的重載當前地圖方式是直接對當前 MapName 執行 map 指令
                     // 或是使用 host_changelevel
-                    Server.ExecuteCommand($"host_changelevel {mapName}");
+                    Server.ExecuteCommand($"host_workshop_map {mapName}");
                 }
             });
         }
