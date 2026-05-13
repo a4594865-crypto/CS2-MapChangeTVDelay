@@ -8,7 +8,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 斷線/觀戰5秒絕對重啟";
-    public override string ModuleVersion => "1.6.0";
+    public override string ModuleVersion => "1.6.3";
 
     // 定義顏色前綴
     private readonly string _prefix = " [\x06 1 v 1 對 戰 模 式 \x06] \x01";
@@ -21,8 +21,10 @@ public class OneVOneReset : BasePlugin
         // 1. 監控玩家斷線
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
+            // 抓取斷線玩家名字
+            string name = @event.Userid?.PlayerName ?? "未知玩家";
             // 延遲一點點，確保統計時玩家已離開
-            AddTimer(0.2f, () => HandlePlayerLeave());
+            AddTimer(0.2f, () => HandlePlayerLeave(name));
             return HookResult.Continue;
         });
 
@@ -32,14 +34,16 @@ public class OneVOneReset : BasePlugin
             // 如果玩家原本在 T(2) 或 CT(3)
             if (@event.Oldteam > 1) 
             {
+                // 抓取換隊玩家名字
+                string name = @event.Userid?.PlayerName ?? "未知玩家";
                 // 跳觀戰那一秒 TeamNum 尚未更新，必須延遲 0.2s 檢查人數才準確
-                AddTimer(0.2f, () => HandlePlayerLeave());
+                AddTimer(0.2f, () => HandlePlayerLeave(name));
             }
             return HookResult.Continue;
         });
     }
 
-    private void HandlePlayerLeave()
+    private void HandlePlayerLeave(string playerName)
     {
         var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
         if (gameRules == null) return;
@@ -60,11 +64,12 @@ public class OneVOneReset : BasePlugin
         {
             _isResetting = true;
 
-            // 使用自定義的前綴發送訊息
-            Server.PrintToChatAll($"{_prefix} \x02偵測到選手離開 (斷線/觀戰)，比賽中止。");
-            Server.PrintToChatAll($"{_prefix} \x01伺服器將在 \x025 秒\x01 後「強制重載地圖」...");
+            // 標色說明：\x04 是亮綠色(人名)，\x02 是紅色(斷線/觀戰)，\x01 是白色(恢復)
+            Server.PrintToChatAll($"{_prefix}玩家 \x04{playerName}\x01 離開 (\x02斷線/觀戰\x01)，比賽中止。");
+            Server.PrintToChatAll($"{_prefix}伺服器將在 \x02 5 秒\x01 後「強制重載地圖」...");
             
-            AddTimer(5.0f, () => {
+            // 這裡改成 5.0f 以對應文字顯示
+            AddTimer(7.0f, () => {
                 ExecuteForceReset();
             });
         }
