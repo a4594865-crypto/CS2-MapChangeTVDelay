@@ -2,96 +2,83 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
 using System.Linq;
-using System.Collections.Generic;
 
 namespace OneVOneReset;
 
 public class OneVOneReset : BasePlugin
 {
-    public override string ModuleName => "1V1 斷線10秒精確認人重啟";
-    public override string ModuleVersion => "1.8.5";
+    public override string ModuleName => "1V1 斷線5秒絕對強制重啟";
+    public override string ModuleVersion => "1.9.1";
 
-    private readonly string _prefix = " \x06[ \x041 v 1 對 戰 模 式 \x06] \x01";
+    // 顏色定義：\x06 綠色, \x01 預設白色
+    private readonly string _prefix = " \x01[\x06 1 v 1 對 戰 模 式 \x01] ";
     
-    // 改用字串儲存 SteamID 增加比對穩定性
-    private List<string> _originalMatchPlayers = new();
-    private bool _isCountingDown = false;
+    // 用來確保 5 秒內只會觸發一次重啟邏輯
+    private bool _isResetting = false;
 
     public override void Load(bool hotReload)
     {
+        // 1. 玩家斷線
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
-            AddTimer(0.5f, () => HandleMatchDisruption());
+            StartResetSequence();
             return HookResult.Continue;
         });
 
+        // 2. 玩家換隊 (包含換到觀戰)
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
-            // 如果玩家換到 CT/T，且正在倒數中，我們手動觸發一次檢查
-            if ((@event.Team == 2 || @event.Team == 3) && _isCountingDown)
+            if (@event.Oldteam > 1) // 從 T(2) 或 CT(3) 離開
             {
-                // 這裡不執行 HandleMatchDisruption，交給 Timer 處理即可
-            }
-            
-            if (@event.Oldteam > 1) 
-            {
-                HandleMatchDisruption();
+                StartResetSequence();
             }
             return HookResult.Continue;
         });
     }
 
-    private void HandleMatchDisruption()
+    private void StartResetSequence()
     {
         var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
-        if (gameRules == null || gameRules.WarmupPeriod || _isCountingDown) return;
+        if (gameRules == null) return;
 
-        // 統計當前在位子上的真人
-        var currentActive = Utilities.GetPlayers()
-            .Where(p => p != null && p.IsValid && !p.IsBot && (p.TeamNum == 2 || p.TeamNum == 3))
-            .ToList();
+        // 如果在熱身，不重啟 (讓玩家可以自由換隊或進出)
+        if (gameRules.WarmupPeriod) return;
 
-        if (currentActive.Count < 2)
+        // 如果已經在倒數了，就直接跳過，不重複發送訊息
+        if (_isResetting) return;
+
+        // 檢查真人人數
+        var activePlayers = Utilities.GetPlayers().Where(p => 
+            p.IsValid && !p.IsBot && (p.TeamNum == 2 || p.TeamNum == 3)
+        ).ToList();
+
+        // 只要對戰席剩不到 2 人
+        if (activePlayers.Count < 2)
         {
-            _isCountingDown = true;
-            // 儲存為字串清單
-            _originalMatchPlayers = currentActive.Select(p => p.SteamID.ToString()).ToList();
+            _isResetting = true;
 
-            Server.PrintToChatAll($"{_prefix} 偵測到選手離開，比賽中斷。");
-            Server.PrintToChatAll($"{_prefix} 等待原玩家重連，\x02 10 秒 \x01 後檢查身份...");
-            
-            AddTimer(10.0f, () => {
-                // 倒數結束，獲取現在對戰位的人
-                var nowPlayers = Utilities.GetPlayers()
-                    .Where(p => p != null && p.IsValid && !p.IsBot && (p.TeamNum == 2 || p.TeamNum == 3))
-                    .ToList();
+            Server.PrintToChatAll($"{_prefix} \x02偵測到選手離開，比賽中止。");
+            Server.PrintToChatAll($"{_prefix} \x01伺服器將在 \x025 秒\x01 後強制重啟地圖...");
 
-                bool isPeopleEnough = nowPlayers.Count >= 2;
-                
-                // 比對 SteamID 字串
-                bool isOriginalStayedPlayerStillHere = _originalMatchPlayers.Count > 0 && 
-                    _originalMatchPlayers.All(id => nowPlayers.Any(p => p.SteamID.ToString() == id));
-
-                // 【核心修正】如果原玩家回來了，這兩個條件必須同時成立
-                if (isPeopleEnough && isOriginalStayedPlayerStillHere)
-                {
-                    Server.PrintToChatAll($"{_prefix} 原玩家已就位，取消地圖重啟。");
-                    _isCountingDown = false; 
-                }
-                else
-                {
-                    ExecuteForceReset();
-                }
+            // 絕對重啟：5秒時間到就執行，不認人，不檢查
+            AddTimer(5.0f, () => {
+                ExecuteForceReset();
             });
         }
     }
 
     private void ExecuteForceReset()
     {
-        _isCountingDown = false;
+        // 1. 徹底關閉比賽自動恢復 (讓回合數歸零)
         Server.ExecuteCommand("mp_backup_restore_load_autobackup 0");
+        
+        // 2. 強制重新載入當前工作坊地圖 (這會強制 SLAYER 插件重新 Load)
         Server.ExecuteCommand($"ds_workshop_changelevel {Server.MapName}");
+
+        // 3. 確保重啟後進入熱身狀態
         Server.ExecuteCommand("mp_warmup_start");
         Server.ExecuteCommand("mp_warmup_pausetimer 1");
+
+        // 提示：重啟地圖後，插件會重新載入，_isResetting 會自動回到 false
     }
 }
