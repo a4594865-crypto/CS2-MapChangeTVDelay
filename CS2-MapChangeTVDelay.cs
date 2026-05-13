@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "1.8.5";
+    public override string ModuleVersion => "1.8.6";
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     
@@ -46,36 +46,41 @@ public class OneVOneReset : BasePlugin
             if (@event.Userid == null || !@event.Userid.IsValid || _isMatchEnded || _isResetting) 
                 return HookResult.Continue;
 
-            string playerName = @event.Userid.PlayerName;
+            var player = @event.Userid;
+            string playerName = player.PlayerName;
             int oldTeam = @event.Oldteam;
             int newTeam = @event.Team;
 
-            // 邏輯：如果原本在打球 (CT:3, T:2)，現在去了觀戰 (1) 或無隊伍 (0)
+            // 邏輯：從 CT(3) 或 T(2) 離開到 觀戰(1) 或 無隊伍(0)
             if (oldTeam > 1 && newTeam <= 1)
             {
-                // 【核心修正】先獲取遊戲規則判斷是否為熱身
                 var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
                 bool isWarmup = gameRules?.WarmupPeriod ?? false;
 
                 if (!isWarmup)
                 {
-                    // 只有非熱身模式才發送聊天訊息
-                    Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 \x10觀 戰 \x01比 賽 已 中 止");
+                    // 【修正點】：計算人數時排除掉「目前觸發事件的玩家」
+                    // 這樣算出來的就是該玩家離開後「剩餘」的對戰人數
+                    int remainingActiveCount = Utilities.GetPlayers().Count(p => 
+                        p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && 
+                        (p.TeamNum == 2 || p.TeamNum == 3) && p.Slot != player.Slot
+                    );
 
-                    AddTimer(4.0f, () => {
-                        if (!_isResetting && !_isMatchEnded)
-                            Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
-                    });
+                    // 如果剩下的玩家不足 2 人，則噴出公告
+                    if (remainingActiveCount < 2)
+                    {
+                        Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 切 換 到 \x10觀 戰 \x01比 賽 已 中 止");
 
-                    Console.WriteLine($"[1V1 Log] {playerName} 觀戰，比賽已中止。");
+                        AddTimer(4.0f, () => {
+                            if (!_isResetting && !_isMatchEnded)
+                                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
+                        });
+
+                        Console.WriteLine($"[1V1 Log] {playerName} 換隊中止比賽，剩餘人數: {remainingActiveCount}");
+                    }
                 }
-                else
-                {
-                    // 熱身模式時僅在後台紀錄，不發送聊天訊息
-                    Console.WriteLine($"[1V1 Log] {playerName} 於熱身期間切換觀戰，跳過提示。");
-                }
 
-                // 觸發人數檢查 (HandlePlayerLeave 內部已有 Warmup 檢查)
+                // 觸發重啟檢查
                 AddTimer(1.0f, () => HandlePlayerLeave(playerName, false));
             }
             else if (oldTeam > 1 && newTeam > 1)
@@ -129,16 +134,15 @@ public class OneVOneReset : BasePlugin
 
                 if (activeCount == 0)
                 {
-                    // 空城重置不再噴聊天訊息，只在 Console 紀錄
-                    Console.WriteLine($"[1V1 Log] 檢測到場上已無玩家，5 秒後執行自動清理重置。");
+                    Console.WriteLine($"[1V1 Log] 檢測到場上已無玩家，執行自動清理重置。");
                 }
                 else
                 {
-                    Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 離開 (\x10 斷 線 \x01) 比賽中止");
-                    Server.PrintToChatAll($"{_prefix}伺服器將在 \x10 5 秒\x01 後「重新重置啟動」...");
+                    Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 離 開 (\x10 斷 線 \x01) 比 賽 中 止");
+                    Server.PrintToChatAll($"{_prefix}伺 服 器 將 在 \x10 5 秒\x01 後「 重 新 重 置 啟 動 」...");
                 }
                 
-                Console.WriteLine($"[1V1 Log] 執行自動重置。觸發者：{playerName}，場上人數：{activeCount}");
+                Console.WriteLine($"[1V1 Log] 執行自動重置。原因: {(activeCount == 0 ? "空場" : "斷線")}, 觸發者: {playerName}");
                 AddTimer(6.0f, () => { ExecuteForceReset(); });
             }
         }
