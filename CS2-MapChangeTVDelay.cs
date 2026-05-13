@@ -11,7 +11,7 @@ public class OneVOneReset : BasePlugin
     public override string ModuleName => "1V1 斷線/武器選單8秒重啟";
     public override string ModuleVersion => "1.6.9";
 
-    private readonly string _prefix = " [\x06 1 v 1 對 戰 模 式 \x06] \x01";
+    private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     
     private bool _isResetting = false;
     private bool _isMatchEnded = false;
