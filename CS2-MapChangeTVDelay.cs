@@ -1,81 +1,91 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
+using CounterStrikeSharp.API.Modules.Commands;
 using System.Linq;
 
 namespace OneVOneReset;
 
 public class OneVOneReset : BasePlugin
 {
-    public override string ModuleName => "1V1 斷線/觀戰8秒絕對重啟(精準判定版)";
-    public override string ModuleVersion => "1.6.7";
+    public override string ModuleName => "1V1 斷線/武器選單8秒重啟";
+    public override string ModuleVersion => "1.6.9";
 
-    private readonly string _prefix = " [\x06 1 v 1 對 戰 模 式 \x01] ";
+    private readonly string _prefix = " [\x06 1 v 1 對 戰 模 式 \x06] \x01";
     
     private bool _isResetting = false;
     private bool _isMatchEnded = false;
 
     public override void Load(bool hotReload)
     {
-        // 1. 監控比賽結束 (防呆鎖定)
+        // 註冊指令 !gs / !GS
+        AddCommand("css_gs", "顯示武器選單並觸發重置", OnGsCommand);
+
+        // 1. 監控比賽結束
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) =>
         {
             _isMatchEnded = true;
             return HookResult.Continue;
         });
 
-        // 2. 監控玩家斷線 (針對離開遊戲)
+        // 2. 監控玩家斷線
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
             if (@event.Userid == null || _isMatchEnded || _isResetting) return HookResult.Continue;
-            
             string name = @event.Userid.PlayerName;
-            // 斷線延遲稍微拉長到 1.5 秒，確保判定 100% 準確
-            AddTimer(1.5f, () => HandlePlayerLeave(name));
+            AddTimer(1.5f, () => HandlePlayerLeave(name, false)); 
             return HookResult.Continue;
         });
 
-        // 3. 監控玩家換隊 (針對跳觀戰)
+        // 3. 監控玩家換隊
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
             if (@event.Oldteam > 1 && @event.Userid != null && !_isMatchEnded && !_isResetting) 
             {
                 string name = @event.Userid.PlayerName;
-                // 跳觀戰維持 0.2 秒快速反應
-                AddTimer(0.2f, () => HandlePlayerLeave(name));
+                AddTimer(0.2f, () => HandlePlayerLeave(name, false));
             }
             return HookResult.Continue;
         });
     }
 
-    private void HandlePlayerLeave(string playerName)
+    private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
     {
-        // 再次檢查鎖定狀態，防止計時器回調時重疊
+        if (player == null || !player.IsValid) return;
+
+        // --- 發送私人武器選單訊息 ---
+        player.PrintToChat($" {ChatColors.Green}您可在聊天欄位輸入您要的武器，以下是常用武器");
+        player.PrintToChat($"{ChatColors.White}---------------------------------------------------------");
+        player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙漠之鷹 ]   、 {ChatColors.Blue}!usp {ChatColors.White}[ USP-S ]   、 {ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]");
+        player.PrintToChat($" [ {ChatColors.Green}步槍{ChatColors.White} ] {ChatColors.Green}!ak {ChatColors.White}[ AK-47 ]   、 {ChatColors.Green}!a1 {ChatColors.White}[ M4-A1 ]   、 {ChatColors.Green}!a4 {ChatColors.White}[ M4-A4 ]");
+        player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]   、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
+
+        // --- 觸發重置檢查 ---
+        if (_isResetting) return;
+        HandlePlayerLeave(player.PlayerName, true); 
+    }
+
+    private void HandlePlayerLeave(string playerName, bool isManual)
+    {
         if (_isMatchEnded || _isResetting) return;
 
         var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
         if (gameRules == null || gameRules.WarmupPeriod) return;
 
-        // 統計場上真人人數
         var activePlayers = Utilities.GetPlayers().Where(p => 
-            p != null && 
-            p.IsValid && 
-            !p.IsBot && 
-            p.SteamID > 0 && 
-            (p.TeamNum == 2 || p.TeamNum == 3)
+            p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3)
         ).ToList();
 
-        // 只要剩下不到 2 人，立刻觸發
-        if (activePlayers.Count < 2)
+        // 如果是手動輸入，或人數不足 2 人
+        if (isManual || activePlayers.Count < 2)
         {
-            // 【重要】立即上鎖，阻擋後面所有的檢查
             _isResetting = true;
 
-            Server.PrintToChatAll($"{_prefix}玩家 \x04{playerName}\x01 離開 (\x04 斷 線 / 觀 戰 \x01)，比賽中止。");
-            Server.PrintToChatAll($"{_prefix}伺服器將在 \x04 5 秒\x01 後「強制重載地圖」...");
+            string reason = isManual ? " \x04手動要求重置\x01 " : " 離開 (\x04 斷 線 / 觀 戰 \x01)";
+            Server.PrintToChatAll($"{_prefix}玩家 \x04{playerName}\x01{reason}，比賽中止。");
+            Server.PrintToChatAll($"{_prefix}伺服器將在 \x04 5 秒\x01 後「將重新啟動」...");
             
-            // 精準倒數 8 秒
-            AddTimer(6.0f, () => {
+            AddTimer(7.0f, () => {
                 ExecuteForceReset();
             });
         }
@@ -88,7 +98,6 @@ public class OneVOneReset : BasePlugin
         Server.ExecuteCommand("mp_warmup_start");
         Server.ExecuteCommand("mp_warmup_pausetimer 1");
         
-        // 地圖更換後，Load 會重新跑，這裡設回 false 確保萬無一失
         _isResetting = false;
         _isMatchEnded = false;
     }
