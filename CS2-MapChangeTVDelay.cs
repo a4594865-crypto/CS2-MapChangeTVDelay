@@ -41,36 +41,40 @@ public class OneVOneReset : BasePlugin
         });
 
         // --- 處理：換隊 / 跳觀戰 (優化判定邏輯) ---
-        RegisterEventHandler<EventPlayerTeam>((@event, info) =>
-        {
-            if (@event.Userid == null || !@event.Userid.IsValid || _isMatchEnded || _isResetting) 
-                return HookResult.Continue;
+        // --- 處理：換隊 / 跳觀戰 (優化判定邏輯) ---
+RegisterEventHandler<EventPlayerTeam>((@event, info) =>
+{
+    if (@event.Userid == null || !@event.Userid.IsValid || _isMatchEnded || _isResetting) 
+        return HookResult.Continue;
 
-            string playerName = @event.Userid.PlayerName;
-            int oldTeam = @event.Oldteam;
-            int newTeam = @event.Team;
+    string playerName = @event.Userid.PlayerName;
+    int oldTeam = @event.Oldteam;
+    int newTeam = @event.Team;
 
-            // 邏輯：如果原本在打球 (CT:3, T:2)，現在去了觀戰 (1) 或無隊伍 (0)
-            if (oldTeam > 1 && newTeam <= 1)
-            {
-                // 1. 遊戲內公告 (顯示玩家切換觀戰)
-                Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰  比賽已中止");
-                Server.PrintToChatAll($"{_prefix}請下一組玩家輸入 \x10!R \x01重新對戰開始");
-                
-                // 2. 黑視窗紀錄
-                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 從隊伍 {oldTeam} 切換到觀戰 {newTeam}。");
+    // 邏輯：如果原本在打球 (CT:3, T:2)，現在去了觀戰 (1) 或無隊伍 (0)
+    if (oldTeam > 1 && newTeam <= 1)
+    {
+        // 1. 遊戲內公告 (第一行訊息立刻噴出)
+        Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰  比賽已中止");
 
-                // 觸發人數檢查，若場上 0 人則執行空城重啟邏輯
-                AddTimer(1.0f, () => HandlePlayerLeave(playerName, false));
-            }
-            // 如果是正常的 CT/T 互換
-            else if (oldTeam > 1 && newTeam > 1)
-            {
-                AddTimer(0.2f, () => HandlePlayerLeave(playerName, false)); 
-            }
-            
-            return HookResult.Continue;
+        // 2. 【延遲顯示】：設定在 3.0 秒後才顯示第二行提醒
+        AddTimer(3.0f, () => {
+            Server.PrintToChatAll($"{_prefix}請下一組玩家輸入 \x10!R \x01重新對戰開始");
         });
+        
+        // 3. 黑視窗紀錄
+        Console.WriteLine($"[1V1 Log] 玩家 {playerName} 換隊，已觸發延遲 3 秒提醒。");
+
+        // 觸發人數檢查
+        AddTimer(1.0f, () => HandlePlayerLeave(playerName, false));
+    }
+    else if (oldTeam > 1 && newTeam > 1)
+    {
+        AddTimer(0.2f, () => HandlePlayerLeave(playerName, false)); 
+    }
+    
+    return HookResult.Continue;
+});
     }
 
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
