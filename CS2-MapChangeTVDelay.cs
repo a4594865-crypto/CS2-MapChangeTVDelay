@@ -3,27 +3,31 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Commands;
 using System.Linq;
-using System; // 引用 System 以使用 DateTime
+using System; 
 
 namespace OneVOneReset;
 
 public class OneVOneReset : BasePlugin
 {
-    public override string ModuleName => "1V1 防惡意重啟/!gs武器提示";
-    public override string ModuleVersion => "1.7.5";
+    public override string ModuleName => "1V1 重啟後自動冷卻版";
+    public override string ModuleVersion => "1.7.8";
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     
     private bool _isResetting = false;
     private bool _isMatchEnded = false;
 
-    // --- 新增：記錄上一次成功執行重啟的時間 ---
-    private static DateTime _lastResetTime = DateTime.MinValue;
-    // 設定冷卻秒數（例如 60 秒）
+    // --- 修改處：移除 static 並由 Load 初始化 ---
+    // 這樣每次地圖換好，這個時間都會重新刷成「當下時間」
+    private DateTime _lastResetTime = DateTime.MinValue;
+    
     private const int CooldownSeconds = 120;
 
     public override void Load(bool hotReload)
     {
+        // 【關鍵優化】：地圖載入成功後，立刻標記時間，開始 120 秒冷卻倒數
+        _lastResetTime = DateTime.Now;
+
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) =>
@@ -65,13 +69,13 @@ public class OneVOneReset : BasePlugin
     {
         if (_isResetting || _isMatchEnded) return;
 
-        // 【新增：冷卻檢查】
+        // 冷卻檢查
         double secondsSinceLastReset = (DateTime.Now - _lastResetTime).TotalSeconds;
         if (secondsSinceLastReset < CooldownSeconds)
         {
-            // 如果還在冷卻中，噴出提示並直接結束，不執行重啟
             int remaining = CooldownSeconds - (int)secondsSinceLastReset;
-            Server.PrintToChatAll($"{_prefix} \x10系統保護 \x01重啟冷卻中 ，請等待 \x04{remaining}\x01 秒。");
+            // 這裡提示訊息微調，讓玩家知道是剛換圖受保護
+            Server.PrintToChatAll($"{_prefix} \x10系統保護 \x01重啟冷卻中，請等待 \x04{remaining}\x01 秒。");
             return;
         }
 
@@ -85,7 +89,7 @@ public class OneVOneReset : BasePlugin
             if (gameRules == null || gameRules.WarmupPeriod) return;
 
             _isResetting = true;
-            // 更新最後重啟時間
+            // 觸發重啟時也標記時間（防止在 5 秒倒數期間被重複觸發）
             _lastResetTime = DateTime.Now;
 
             Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 離開 (\x10 斷 線 / 觀 戰 \x01) 比賽中止");
