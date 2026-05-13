@@ -7,58 +7,61 @@ namespace OneVOneReset;
 
 public class OneVOneReset : BasePlugin
 {
-    public override string ModuleName => "1V1 比賽中斷地圖重載";
-    public override string ModuleVersion => "1.4.0";
+    public override string ModuleName => "1V1 狀態感應重載工具";
+    public override string ModuleVersion => "1.4.2";
 
     public override void Load(bool hotReload)
     {
-        // 1. 監控玩家斷線
+        // 監控斷線
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
-            CheckAndReload();
+            HandlePlayerLeave();
             return HookResult.Continue;
         });
 
-        // 2. 監控玩家換隊
+        // 監控換隊
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
             if (@event.Oldteam > 1) 
             {
-                CheckAndReload();
+                HandlePlayerLeave();
             }
             return HookResult.Continue;
         });
     }
 
-    private void CheckAndReload()
+    private void HandlePlayerLeave()
     {
-        // --- 核心判斷：是否在熱身中 ---
-        // 如果現在是熱身階段，直接跳過，不執行重載
-        if (GameRules().WarmupPeriod) 
+        // 獲取遊戲規則
+        var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+
+        if (gameRules == null) return;
+
+        // 1. 辨識狀態：如果是熱身模式，直接結束邏輯
+        if (gameRules.WarmupPeriod)
         {
-            return; 
+            return;
         }
 
-        // 如果不是熱身（代表比賽已經開始），檢查人數
+        // 2. 比賽中邏輯：統計 T 和 CT 的真人數量
         var activePlayers = Utilities.GetPlayers().Where(p => 
             p.IsValid && !p.IsBot && (p.TeamNum == 2 || p.TeamNum == 3)
         ).ToList();
 
-        // 只要比賽中人數少於 2 人，觸發 5 秒重載
+        // 3. 判定重載：人數不足 2 人時觸發
         if (activePlayers.Count < 2)
         {
-            Server.PrintToChatAll(" \x02[1V1] 偵測到比賽中選手離開，5 秒後重新載入地圖...");
+            Server.PrintToChatAll(" \x02[1V1] 偵測到比賽中途有人離開...");
+            Server.PrintToChatAll(" \x02[1V1] 伺服器將在 5 秒後重新載入地圖以重置狀態。");
             
             AddTimer(5.0f, () => {
-                // 再次執行地圖重新載入，徹底重置所有插件
-                Server.ExecuteCommand($"map {Server.MapName}");
+                // 重新檢查人數，若 5 秒後依然沒人補回則執行地圖重新載入
+                var finalCheck = Utilities.GetPlayers().Count(p => p.IsValid && !p.IsBot && (p.TeamNum == 2 || p.TeamNum == 3));
+                if (finalCheck < 2)
+                {
+                    Server.ExecuteCommand($"map {Server.MapName}");
+                }
             });
         }
-    }
-
-    // 輔助函數：獲取遊戲規則
-    private static CCSGameRules GameRules()
-    {
-        return Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").First().GameRules!;
     }
 }
