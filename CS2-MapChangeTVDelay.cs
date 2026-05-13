@@ -7,51 +7,53 @@ namespace OneVOneReset;
 
 public class OneVOneReset : BasePlugin
 {
-    public override string ModuleName => "1V1 斷線強制恢復熱身";
-    public override string ModuleVersion => "1.0.0";
+    public override string ModuleName => "1V1 斷線5秒絕對重啟";
+    public override string ModuleVersion => "1.2.0";
 
     public override void Load(bool hotReload)
     {
-        // 監控玩家斷線（離開伺服器）
+        // 1. 監控玩家斷線
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
-            // 延遲 1 秒執行，確保系統已經把離開的人移出名單
-            AddTimer(1.0f, CheckPlayersAndReset);
+            // 只要有人斷開，立即觸發倒數邏輯
+            TriggerCountdownRestart();
             return HookResult.Continue;
         });
 
-        // 監控玩家換隊（有人換到觀戰位也視同離開比賽）
+        // 2. 監控玩家換隊 (換到觀戰也視同離開比賽)
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
-            AddTimer(1.0f, CheckPlayersAndReset);
+            // 如果是從 T 或 CT 換走，觸發倒數
+            if (@event.Oldteam > 1) 
+            {
+                TriggerCountdownRestart();
+            }
             return HookResult.Continue;
         });
     }
 
-    private void CheckPlayersAndReset()
+    private void TriggerCountdownRestart()
     {
-        // 1. 抓取目前在 T(2) 或 CT(3) 的真人玩家（排除 Bot）
-        var activePlayers = Utilities.GetPlayers().Where(p => 
-            p.IsValid && 
-            !p.IsBot && 
-            (p.TeamNum == 2 || p.TeamNum == 3)
-        ).ToList();
+        // 1. 立即廣播通知
+        Server.PrintToChatAll(" \x02[1V1系統] 偵測到選手離開，比賽結束。");
+        Server.PrintToChatAll(" \x02[1V1系統] 地圖將在 5 秒後重新啟動並恢復熱身...");
 
-        // 2. 如果場上能打的人少於 2 個
-        if (activePlayers.Count < 2)
-        {
-            // 3. 執行「暴力還原」指令
-            // mp_restartgame 1：強制終止目前卡住的回合（這是解決你卡回合問題的藥方）
-            Server.ExecuteCommand("mp_restartgame 1");
-            
-            // mp_warmup_start：立刻開啟熱身模式
-            Server.ExecuteCommand("mp_warmup_start");
-            
-            // mp_warmup_pausetimer 1：讓熱身時間無限長，不要自動開始
-            Server.ExecuteCommand("mp_warmup_pausetimer 1");
+        // 2. 設定一個不可逆的 5 秒定時器
+        AddTimer(5.0f, () => {
+            ExecuteForceReset();
+        });
+    }
 
-            // 在聊天室提醒剩下的那個人
-            Server.PrintToChatAll(" \x02[1V1] 偵測到選手不足，已自動終止比賽並恢復熱身狀態。");
-        }
+    private void ExecuteForceReset()
+    {
+        // 執行「暴力還原」指令：無視任何狀態，強制重開
+        // mp_restartgame 1 會終止當前回合並重置所有實體
+        Server.ExecuteCommand("mp_restartgame 1");
+        
+        // 確保重啟後直接進入熱身，且時間凍結
+        Server.ExecuteCommand("mp_warmup_start");
+        Server.ExecuteCommand("mp_warmup_pausetimer 1");
+
+        Server.PrintToChatAll(" \x05[1V1系統] 地圖已重啟，恢復熱身狀態，等待下一對玩家。");
     }
 }
