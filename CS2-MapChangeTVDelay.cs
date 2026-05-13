@@ -54,8 +54,8 @@ public class OneVOneReset : BasePlugin
         if (player == null || !player.IsValid) return;
 
         // --- 發送私人武器選單訊息 ---
-        player.PrintToChat($" {ChatColors.Green}您可在聊天欄位輸入您要的武器，以下是常用武器");
-        player.PrintToChat($"{ChatColors.White}---------------------------------------------------------");
+        player.PrintToChat($" 您可在聊天欄位輸入您要的武器，以下是常用武器");
+        player.PrintToChat($"{ChatColors.Green}---------------------------------------------------------------");
         player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙漠之鷹 ]   、 {ChatColors.Blue}!usp {ChatColors.White}[ USP-S ]   、 {ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]");
         player.PrintToChat($" [ {ChatColors.Green}步槍{ChatColors.White} ] {ChatColors.Green}!ak {ChatColors.White}[ AK-47 ]   、 {ChatColors.Green}!a1 {ChatColors.White}[ M4-A1 ]   、 {ChatColors.Green}!a4 {ChatColors.White}[ M4-A4 ]");
         player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]   、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
@@ -85,7 +85,7 @@ public class OneVOneReset : BasePlugin
             Server.PrintToChatAll($"{_prefix}玩家 \x04{playerName}\x01{reason}，比賽中止。");
             Server.PrintToChatAll($"{_prefix}伺服器將在 \x04 5 秒\x01 後「將重新啟動」...");
             
-            AddTimer(7.0f, () => {
+            AddTimer(5.0f, () => {
                 ExecuteForceReset();
             });
         }
