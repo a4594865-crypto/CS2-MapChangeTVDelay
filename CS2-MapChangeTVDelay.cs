@@ -60,19 +60,19 @@ public class OneVOneReset : BasePlugin
                 if (!isWarmup)
                 {
                     // 只有非熱身模式才發送聊天訊息
-                    Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰 比 賽 已 中 止");
+                    Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 \x10觀 戰 \x01比 賽 已 中 止");
 
                     AddTimer(4.0f, () => {
                         if (!_isResetting && !_isMatchEnded)
-                            Server.PrintToChatAll($"{_prefix}請 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
+                            Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
                     });
 
-                    Console.WriteLine($"[1V1 Log] 玩家 {playerName} 觀戰，比賽已中止。");
+                    Console.WriteLine($"[1V1 Log] {playerName} 觀戰，比賽已中止。");
                 }
                 else
                 {
                     // 熱身模式時僅在後台紀錄，不發送聊天訊息
-                    Console.WriteLine($"[1V1 Log] 玩家 {playerName} 於熱身期間切換觀戰，跳過提示。");
+                    Console.WriteLine($"[1V1 Log] {playerName} 於熱身期間切換觀戰，跳過提示。");
                 }
 
                 // 觸發人數檢查 (HandlePlayerLeave 內部已有 Warmup 檢查)
@@ -117,7 +117,7 @@ public class OneVOneReset : BasePlugin
                 if (secondsSinceLastReset < CooldownSeconds)
                 {
                     int remaining = CooldownSeconds - (int)secondsSinceLastReset;
-                    Server.PrintToChatAll($"{_prefix} \x10系統保護 \x01重啟冷卻中，剩餘 \x04{remaining}\x01 秒。");
+                    Server.PrintToChatAll($"{_prefix} \x10重啟 \x01冷卻中，剩餘 \x04{remaining}\x01 秒。");
                     return;
                 }
             }
