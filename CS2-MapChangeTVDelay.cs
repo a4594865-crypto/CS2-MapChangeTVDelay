@@ -41,40 +41,40 @@ public class OneVOneReset : BasePlugin
         });
 
         // --- 處理：換隊 / 跳觀戰 (優化判定邏輯) ---
-        // --- 處理：換隊 / 跳觀戰 (優化判定邏輯) ---
-RegisterEventHandler<EventPlayerTeam>((@event, info) =>
-{
-    if (@event.Userid == null || !@event.Userid.IsValid || _isMatchEnded || _isResetting) 
-        return HookResult.Continue;
+        RegisterEventHandler<EventPlayerTeam>((@event, info) =>
+        {
+            if (@event.Userid == null || !@event.Userid.IsValid || _isMatchEnded || _isResetting) 
+                return HookResult.Continue;
 
-    string playerName = @event.Userid.PlayerName;
-    int oldTeam = @event.Oldteam;
-    int newTeam = @event.Team;
+            string playerName = @event.Userid.PlayerName;
+            int oldTeam = @event.Oldteam;
+            int newTeam = @event.Team;
 
-    // 邏輯：如果原本在打球 (CT:3, T:2)，現在去了觀戰 (1) 或無隊伍 (0)
-    if (oldTeam > 1 && newTeam <= 1)
-    {
-        // 1. 遊戲內公告 (第一行訊息立刻噴出)
-        Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰  比賽已中止");
+            // 邏輯：如果原本在打球 (CT:3, T:2)，現在去了觀戰 (1) 或無隊伍 (0)
+            if (oldTeam > 1 && newTeam <= 1)
+            {
+                // 1. 遊戲內公告 (第一行訊息立刻噴出)
+                Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 切 換 到 觀 戰  比賽已中止");
 
-        // 2. 【延遲顯示】：設定在 3.0 秒後才顯示第二行提醒
-        AddTimer(3.0f, () => {
-            Server.PrintToChatAll($"{_prefix}請下一組玩家輸入 \x10!R \x01重新對戰開始");
+                // 2. 【延遲顯示】：設定在 3.0 秒後才顯示第二行提醒
+                AddTimer(3.0f, () => {
+                    Server.PrintToChatAll($"{_prefix}請下一組玩家輸入 \x10!R \x01重新對戰開始");
+                });
+                
+                // 3. 黑視窗紀錄
+                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 換隊，已觸發延遲 3 秒提醒。");
+
+                // 觸發人數檢查
+                AddTimer(1.0f, () => HandlePlayerLeave(playerName, false));
+            }
+            else if (oldTeam > 1 && newTeam > 1)
+            {
+                // 單純 CT/T 互換
+                AddTimer(0.2f, () => HandlePlayerLeave(playerName, false)); 
+            }
+            
+            return HookResult.Continue;
         });
-        
-        // 3. 黑視窗紀錄
-        Console.WriteLine($"[1V1 Log] 玩家 {playerName} 換隊，已觸發延遲 3 秒提醒。");
-
-        // 觸發人數檢查
-        AddTimer(1.0f, () => HandlePlayerLeave(playerName, false));
-    }
-    else if (oldTeam > 1 && newTeam > 1)
-    {
-        AddTimer(0.2f, () => HandlePlayerLeave(playerName, false)); 
-    }
-    
-    return HookResult.Continue;
-});
     }
 
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
@@ -103,22 +103,18 @@ RegisterEventHandler<EventPlayerTeam>((@event, info) =>
 
             double secondsSinceLastReset = (DateTime.Now - _lastResetTime).TotalSeconds;
 
-            // --- 重啟判定 ---
-
-            // 只有「斷線」且「場上有 1 人」時，才受 360 秒保護
+            // --- 情況 1：斷線且場上剩 1 人 (執行 360s 冷卻檢查) ---
             if (isDisconnect && activeCount == 1)
             {
                 if (secondsSinceLastReset < CooldownSeconds)
                 {
                     int remaining = CooldownSeconds - (int)secondsSinceLastReset;
-                    Server.PrintToChatAll($"{_prefix} \x01重啟冷卻中，剩餘 \x04{remaining}\x01 秒。");
+                    Server.PrintToChatAll($"{_prefix} \x10系統保護 \x01重啟冷卻中，剩餘 \x04{remaining}\x01 秒。");
                     return;
                 }
             }
 
-            // 觸發重啟的情況：
-            // 1. 斷線且過了冷卻。
-            // 2. 場上完全沒人 (activeCount == 0)，無視冷卻。
+            // --- 情況 2：執行重啟 (斷線且過冷卻，或是場上完全沒人) ---
             if (isDisconnect || activeCount == 0)
             {
                 _isResetting = true;
@@ -150,41 +146,4 @@ RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         _isResetting = false;
         _isMatchEnded = false;
     }
-}            {
-                double secondsSinceLastReset = (DateTime.Now - _lastResetTime).TotalSeconds;
-                
-                // 【核心邏輯更新】
-                // 如果場上還剩 1 個人，且還在 360 秒冷卻內，則不允許重啟
-                if (activeCount == 1 && secondsSinceLastReset < CooldownSeconds)
-                {
-                    int remaining = CooldownSeconds - (int)secondsSinceLastReset;
-                    Server.PrintToChatAll($"{_prefix} \x10系統保護 \x01重啟冷卻中，剩餘 \x04{remaining}\x01 秒。");
-                    return;
-                }
-                
-                // 如果 activeCount == 0 (沒人了)，不論冷卻多久，都會執行下面的重啟代碼
-
-                _isResetting = true;
-                _lastResetTime = DateTime.Now;
-
-                Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 離開 (\x10 斷 線 \x01) 比賽中止");
-                Server.PrintToChatAll($"{_prefix}伺服器將在 \x10 5 秒\x01 後「重新重置啟動」...");
-                
-                Console.WriteLine($"[1V1 Log] 偵測到斷線 ({playerName})，剩餘人數: {activeCount}，觸發重置。");
-                
-                AddTimer(6.0f, () => { ExecuteForceReset(); });
-            }
-        }
-    }
-
-    private void ExecuteForceReset()
-    {
-        Server.ExecuteCommand("mp_backup_restore_load_autobackup 0");
-        Server.ExecuteCommand($"ds_workshop_changelevel {Server.MapName}");
-        Server.ExecuteCommand("mp_warmup_start");
-        Server.ExecuteCommand("mp_warmup_pausetimer 1");
-        
-        _isResetting = false;
-        _isMatchEnded = false;
-    }
 }
