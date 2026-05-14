@@ -10,28 +10,39 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "1.9.9"; // 稍微提升版本號
+    public override string ModuleVersion => "2.0.0"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isResetting = false;
     private bool _isMatchEnded = false;
-    private DateTime _lastResetTime = DateTime.MinValue;
 
     public override void Load(bool hotReload)
     {
-        _lastResetTime = DateTime.Now;
-        
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
+        // --- 新增：捕捉回合開始事件 ---
+        RegisterEventHandler<EventRoundStart>((@event, info) => {
+            // 檢查是否為正式回合（非熱身、且場上有2人）
+            int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
+            
+            // 如果場上有 2 人對打，就印出開始 LOG
+            if (activeCount == 2)
+            {
+                Console.WriteLine($"[1V1 Log] >>> 比賽回合正式開始 (對戰檢測啟動) <<<");
+            }
+            return HookResult.Continue;
+        });
+
+        // 比賽正式結束（如一方拿到 16 分）
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
             _isMatchEnded = true;
+            Console.WriteLine($"[1V1 Log] 比賽總局數已達上限，比賽結束。");
             return HookResult.Continue;
         });
 
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
             if (@event.Userid == null || _isMatchEnded || _isResetting) return HookResult.Continue;
             var player = @event.Userid;
-            
             if (player.TeamNum <= 1) return HookResult.Continue;
 
             AddTimer(1.5f, () => HandlePlayerLeave(player.PlayerName, true)); 
@@ -50,7 +61,6 @@ public class OneVOneReset : BasePlugin
                     if (activeCount < 2)
                     {
                         Server.PrintToChatAll($"{_prefix}玩 家 \x10{player.PlayerName}\x01 切 換 到 \x10觀 戰 \x01比 賽 已 中 止");
-                        // --- 跳觀戰的中止日誌 ---
                         Console.WriteLine($"[1V1 Log] 玩家 {player.PlayerName} 跳往觀戰，比賽中止。");
                         
                         AddTimer(4.0f, () => {
@@ -88,14 +98,11 @@ public class OneVOneReset : BasePlugin
             {
                 Console.WriteLine($"[1V1 Log] 完全空城，執行重置。");
                 _isResetting = true;
-                _lastResetTime = DateTime.Now;
                 AddTimer(6.0f, () => { ExecuteForceReset(); });
             }
             else if (isDisconnect && activeCount == 1) 
             {
                 Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01比 賽 已 中 止");
-                
-                // --- 補上這行：斷線的中止日誌 ---
                 Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線，比賽中止 (尚有觀戰者，不重啟)。");
 
                 AddTimer(4.0f, () => {
@@ -109,7 +116,6 @@ public class OneVOneReset : BasePlugin
     private void ExecuteForceReset()
     {
         Server.ExecuteCommand($"ds_workshop_changelevel {Server.MapName}");
-        
         _isResetting = false;
         _isMatchEnded = false;
         Console.WriteLine($"[1V1 Log] 執行地圖重換，伺服器已自動初始化。");
