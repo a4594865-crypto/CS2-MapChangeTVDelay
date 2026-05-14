@@ -9,8 +9,8 @@ namespace OneVOneReset;
 
 public class OneVOneReset : BasePlugin
 {
-    public override string ModuleName => "1V1 訊息提示與槍枝顯示";
-    public override string ModuleVersion => "2.5.1"; 
+    public override string ModuleName => "1V1 訊息提示與 Log 監控";
+    public override string ModuleVersion => "2.5.2"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isMatchEnded = false;
@@ -32,7 +32,7 @@ public class OneVOneReset : BasePlugin
             return HookResult.Continue;
         });
 
-        // [功能 2] 處理玩家離線訊息
+        // [功能 2] 處理玩家離線 Log 與訊息
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
             if (IsInWarmup() || @event.Userid == null || _isMatchEnded) 
                 return HookResult.Continue;
@@ -49,7 +49,7 @@ public class OneVOneReset : BasePlugin
             return HookResult.Continue;
         });
 
-        // [功能 3] 處理玩家換隊訊息 (跳觀戰)
+        // [功能 3] 處理玩家換隊 Log 與訊息 (跳觀戰)
         RegisterEventHandler<EventPlayerTeam>((@event, info) => {
             if (IsInWarmup() || @event.Userid == null || !@event.Userid.IsValid || _isMatchEnded) 
                 return HookResult.Continue;
@@ -68,7 +68,11 @@ public class OneVOneReset : BasePlugin
                     int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
                     if (activeCount < 2)
                     {
+                        // 遊戲內廣播
                         Server.PrintToChatAll($"{_prefix}玩 家 \x10{player.PlayerName}\x01 切 換 到 \x10 觀 戰 \x01 比 賽 已 中 止");
+                        
+                        // 後台 Log
+                        Console.WriteLine($"[1V1 Log] 玩家 {player.PlayerName} 切換到觀戰，比賽已中止");
                         
                         AddTimer(3.0f, () => {
                             if (!_isMatchEnded)
@@ -86,7 +90,6 @@ public class OneVOneReset : BasePlugin
     {
         if (player == null || !player.IsValid) return;
         
-        // 恢復完整的 gs 武器列表顯示
         player.PrintToChat($" {ChatColors.Orange}可 在 聊 天 欄 位 輸 入 您 要 的 武 器，以 下 是 常 用 武 器");
         player.PrintToChat($" -----------------------------------------------------------------");
         player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙漠之鷹 ]   、 {ChatColors.Blue}!usp {ChatColors.White}[ USP-S ]   、 {ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]");
@@ -104,7 +107,11 @@ public class OneVOneReset : BasePlugin
         {
             if (isDisconnect && activeCount == 1) 
             {
+                // 遊戲內廣播
                 Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01 比 賽 已 中 止");
+                
+                // 後台 Log
+                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線離場，比賽已中止");
                 
                 AddTimer(3.0f, () => {
                     if (!_isMatchEnded)
