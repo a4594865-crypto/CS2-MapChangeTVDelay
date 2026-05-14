@@ -9,15 +9,14 @@ namespace OneVOneReset;
 
 public class OneVOneReset : BasePlugin
 {
-    public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "2.4.5"; 
+    public override string ModuleName => "1V1 訊息提示與槍枝顯示";
+    public override string ModuleVersion => "2.5.0"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
-    private bool _isResetting = false;
     private bool _isMatchEnded = false;
     private readonly System.Collections.Generic.HashSet<ulong> _disconnectingPlayers = new();
 
-    // --- 熱身判定：完全避免在熱身時執行重啟邏輯 ---
+    // 判斷熱身模式：熱身期間不顯示提示訊息
     private bool IsInWarmup()
     {
         var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
@@ -26,6 +25,7 @@ public class OneVOneReset : BasePlugin
 
     public override void Load(bool hotReload)
     {
+        // [功能 1] 槍枝顯示指令
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
@@ -33,9 +33,9 @@ public class OneVOneReset : BasePlugin
             return HookResult.Continue;
         });
 
+        // [功能 2] 處理玩家離線訊息
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
-            // 熱身模式下直接跳過
-            if (IsInWarmup() || @event.Userid == null || _isMatchEnded || _isResetting) 
+            if (IsInWarmup() || @event.Userid == null || _isMatchEnded) 
                 return HookResult.Continue;
 
             var player = @event.Userid;
@@ -44,20 +44,20 @@ public class OneVOneReset : BasePlugin
             if (player.SteamID > 0) _disconnectingPlayers.Add(player.SteamID);
 
             AddTimer(1.5f, () => {
-                HandlePlayerLeave(player.PlayerName, true);
+                HandlePlayerLeaveMsg(player.PlayerName, true);
                 _disconnectingPlayers.Remove(player.SteamID);
             }); 
             return HookResult.Continue;
         });
 
+        // [功能 3] 處理玩家換隊訊息 (跳觀戰)
         RegisterEventHandler<EventPlayerTeam>((@event, info) => {
-            // 熱身模式下直接跳過
-            if (IsInWarmup() || @event.Userid == null || !@event.Userid.IsValid || _isMatchEnded || _isResetting) 
+            if (IsInWarmup() || @event.Userid == null || !@event.Userid.IsValid || _isMatchEnded) 
                 return HookResult.Continue;
 
             var player = @event.Userid;
 
-            // 檢查真人數量，如果是最後一人離開且即將空城，則不處理換隊提示
+            // 檢查是否為最後一人
             int realPlayerCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0);
             if (realPlayerCount <= 1 || _disconnectingPlayers.Contains(player.SteamID)) 
                 return HookResult.Continue;
@@ -70,17 +70,15 @@ public class OneVOneReset : BasePlugin
                     int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
                     if (activeCount < 2)
                     {
-                        // 恢復廣播訊息
                         Server.PrintToChatAll($"{_prefix}玩 家 \x10{player.PlayerName}\x01 切 換 到 \x10 觀 戰 \x01 比 賽 已 中 止");
-                        Console.WriteLine($"[1V1 Log] 玩家 {player.PlayerName} 跳往觀戰，比賽中止。");
                         
                         AddTimer(3.0f, () => {
-                            if (!_isResetting && !_isMatchEnded)
+                            if (!_isMatchEnded)
                                 Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
                         });
                     }
                 });
-                AddTimer(1.2f, () => HandlePlayerLeave(player.PlayerName, false));
+                AddTimer(1.2f, () => HandlePlayerLeaveMsg(player.PlayerName, false));
             }
             return HookResult.Continue;
         });
@@ -92,49 +90,24 @@ public class OneVOneReset : BasePlugin
         player.PrintToChat($" {ChatColors.Orange}可 在 聊 天 欄 位 輸 入 您 要 的 武 器...");
     }
 
-    private void HandlePlayerLeave(string playerName, bool isDisconnect)
+    private void HandlePlayerLeaveMsg(string playerName, bool isDisconnect)
     {
-        // 再次確保不是在熱身期間觸發重啟
-        if (IsInWarmup() || _isResetting || _isMatchEnded) return;
+        if (IsInWarmup() || _isMatchEnded) return;
 
         int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
-        int totalHumanPlayers = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0);
 
         if (activeCount < 2)
         {
-            if (totalHumanPlayers == 0) 
+            if (isDisconnect && activeCount == 1) 
             {
-                // 空城判定：包含觀戰席都沒人了
-                Console.WriteLine($"[1V1 Log] 完全空城，執行重置。");
-                _isResetting = true;
-                AddTimer(5.0f, () => { ExecuteForceReset(); });
-            }
-            else if (isDisconnect && activeCount == 1) 
-            {
-                // 如果還有人在觀戰，則只噴離線訊息，不重啟
+                // 有人斷線且對戰席只剩一人時廣播
                 Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01 比 賽 已 中 止");
-                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 跳出斷線，比賽中止。");
-
+                
                 AddTimer(3.0f, () => {
-                    if (!_isResetting && !_isMatchEnded)
+                    if (!_isMatchEnded)
                         Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
                 });
             }
         }
-    }
-
-    private void ExecuteForceReset()
-    {
-        // 如果執行瞬間剛好有人進來或是變熱身，做最後攔截
-        if (IsInWarmup()) 
-        {
-            _isResetting = false;
-            return;
-        }
-
-        Server.ExecuteCommand($"ds_workshop_changelevel {Server.MapName}");
-        _isResetting = false;
-        _isMatchEnded = false;
-        Console.WriteLine($"[1V1 Log] 執行地圖重換，伺服器已自動初始化。");
     }
 }
