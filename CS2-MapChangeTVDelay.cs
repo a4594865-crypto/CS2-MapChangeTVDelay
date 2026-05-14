@@ -10,13 +10,12 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 訊息提示與槍枝顯示";
-    public override string ModuleVersion => "2.5.0"; 
+    public override string ModuleVersion => "2.5.1"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isMatchEnded = false;
     private readonly System.Collections.Generic.HashSet<ulong> _disconnectingPlayers = new();
 
-    // 判斷熱身模式：熱身期間不顯示提示訊息
     private bool IsInWarmup()
     {
         var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
@@ -25,7 +24,7 @@ public class OneVOneReset : BasePlugin
 
     public override void Load(bool hotReload)
     {
-        // [功能 1] 槍枝顯示指令
+        // [功能 1] 完整槍枝顯示指令
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
@@ -57,7 +56,6 @@ public class OneVOneReset : BasePlugin
 
             var player = @event.Userid;
 
-            // 檢查是否為最後一人
             int realPlayerCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0);
             if (realPlayerCount <= 1 || _disconnectingPlayers.Contains(player.SteamID)) 
                 return HookResult.Continue;
@@ -87,7 +85,13 @@ public class OneVOneReset : BasePlugin
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return;
-        player.PrintToChat($" {ChatColors.Orange}可 在 聊 天 欄 位 輸 入 您 要 的 武 器...");
+        
+        // 恢復完整的 gs 武器列表顯示
+        player.PrintToChat($" {ChatColors.Orange}可 在 聊 天 欄 位 輸 入 您 要 的 武 器，以 下 是 常 用 武 器");
+        player.PrintToChat($" -----------------------------------------------------------------");
+        player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙漠之鷹 ]   、 {ChatColors.Blue}!usp {ChatColors.White}[ USP-S ]   、 {ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]");
+        player.PrintToChat($" [ {ChatColors.Green}步槍{ChatColors.White} ] {ChatColors.Green}!ak {ChatColors.White}[ AK-47 ]   、 {ChatColors.Green}!a1 {ChatColors.White}[ M4-A1 ]   、 {ChatColors.Green}!a4 {ChatColors.White}[ M4-A4 ]");
+        player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]   、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
     }
 
     private void HandlePlayerLeaveMsg(string playerName, bool isDisconnect)
@@ -100,7 +104,6 @@ public class OneVOneReset : BasePlugin
         {
             if (isDisconnect && activeCount == 1) 
             {
-                // 有人斷線且對戰席只剩一人時廣播
                 Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01 比 賽 已 中 止");
                 
                 AddTimer(3.0f, () => {
