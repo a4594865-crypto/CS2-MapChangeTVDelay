@@ -2,6 +2,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Cvars; // 引用變數模組
 using System.Linq;
 using System; 
 
@@ -10,24 +11,22 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "2.2.6"; 
+    public override string ModuleVersion => "2.2.7"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isResetting = false;
     private bool _isMatchEnded = false;
     private readonly System.Collections.Generic.HashSet<ulong> _disconnectingPlayers = new();
 
-    // --- 修正後的熱身判定：直接尋找 cs_gamerules 實體 ---
+    // --- 最強硬、絕對不報錯的熱身判定 ---
     private bool IsInWarmup()
     {
-        // 直接找 cs_gamerules，這是 CS2 存放遊戲狀態的核心實體
-        var gameRules = Utilities.FindAllEntitiesByDesignerName<CGameRules>("cs_gamerules").FirstOrDefault();
-        
-        // 如果找不到規則實體，保守起見視為熱身模式（不啟動插件）
-        if (gameRules == null) return true;
-        
-        // 直接讀取 WarmupPeriod 屬性
-        return gameRules.WarmupPeriod;
+        // 直接從伺服器控制台抓變數 mp_warmup_predict
+        // 這個變數代表目前是否「預期」為熱身狀態
+        var warmupVar = ConVar.Find("mp_warmup_predict");
+        if (warmupVar == null) return false;
+
+        return warmupVar.GetPrimitiveValue<bool>();
     }
 
     public override void Load(bool hotReload)
@@ -40,7 +39,7 @@ public class OneVOneReset : BasePlugin
         });
 
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
-            // 熱身模式下，直接忽略事件
+            // 熱身模式下，直接停用插件邏輯
             if (IsInWarmup() || @event.Userid == null || _isMatchEnded || _isResetting) 
                 return HookResult.Continue;
             
@@ -59,7 +58,7 @@ public class OneVOneReset : BasePlugin
         });
 
         RegisterEventHandler<EventPlayerTeam>((@event, info) => {
-            // 熱身模式下，換隊邏輯不啟動
+            // 熱身模式下，直接停用插件邏輯
             if (IsInWarmup() || @event.Userid == null || !@event.Userid.IsValid || _isMatchEnded || _isResetting) 
                 return HookResult.Continue;
 
@@ -105,7 +104,7 @@ public class OneVOneReset : BasePlugin
 
     private void HandlePlayerLeave(string playerName, bool isDisconnect, ulong steamId)
     {
-        // 判斷熱身，熱身時絕對不重啟
+        // 熱身模式下，絕不執行重啟判斷
         if (IsInWarmup() || _isResetting || _isMatchEnded) return;
 
         int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
@@ -132,7 +131,7 @@ public class OneVOneReset : BasePlugin
 
     private void ExecuteForceReset()
     {
-        // 最後檢查，確保不是在熱身模式下重啟地圖
+        // 二次檢查，確保在換地圖前那一刻不是熱身
         if (IsInWarmup()) 
         {
             _isResetting = false;
