@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "1.9.8"; 
+    public override string ModuleVersion => "1.9.9"; // 稍微提升版本號
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isResetting = false;
@@ -49,7 +49,9 @@ public class OneVOneReset : BasePlugin
                     int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
                     if (activeCount < 2)
                     {
-                        Server.PrintToChatAll($"{_prefix}玩 家 \x10{player.PlayerName}\x01 切 換 到 \x10觀 戰 / 離 線 \x01比 賽 已 中 止");
+                        Server.PrintToChatAll($"{_prefix}玩 家 \x10{player.PlayerName}\x01 切 換 到 \x10觀 戰 \x01比 賽 已 中 止");
+                        // --- 跳觀戰的中止日誌 ---
+                        Console.WriteLine($"[1V1 Log] 玩家 {player.PlayerName} 跳往觀戰，比賽中止。");
                         
                         AddTimer(4.0f, () => {
                             if (!_isResetting && !_isMatchEnded)
@@ -91,7 +93,11 @@ public class OneVOneReset : BasePlugin
             }
             else if (isDisconnect && activeCount == 1) 
             {
-                Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 切 換 到 \x10觀 戰 / 離 線 \x01比 賽 已 中 止");
+                Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01比 賽 已 中 止");
+                
+                // --- 補上這行：斷線的中止日誌 ---
+                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線，比賽中止 (尚有觀戰者，不重啟)。");
+
                 AddTimer(4.0f, () => {
                     if (!_isResetting && !_isMatchEnded)
                         Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
@@ -102,7 +108,6 @@ public class OneVOneReset : BasePlugin
 
     private void ExecuteForceReset()
     {
-        // 既然換圖會重置所有狀態，只保留核心換圖指令
         Server.ExecuteCommand($"ds_workshop_changelevel {Server.MapName}");
         
         _isResetting = false;
