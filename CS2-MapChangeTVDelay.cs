@@ -10,41 +10,34 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "2.1.3"; 
+    public override string ModuleVersion => "1.9.9"; // 稍微提升版本號
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isResetting = false;
     private bool _isMatchEnded = false;
-    
-    // --- 新增：紀錄上次 LOG 時間，防止重複列印 ---
-    private DateTime _lastLogTime = DateTime.MinValue;
+    private DateTime _lastResetTime = DateTime.MinValue;
 
     public override void Load(bool hotReload)
     {
+        _lastResetTime = DateTime.Now;
+        
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
-        RegisterEventHandler<EventRoundAnnounceMatchStart>((@event, info) => {
-            // 如果距離上次列印不到 5 秒，就直接略過
-            if ((DateTime.Now - _lastLogTime).TotalSeconds < 5) return HookResult.Continue;
-
-            Console.WriteLine($"[1V1 Log] >>> 玩家已輸入 !R，比賽正式啟動 (VProfLite 同步檢測中) <<<");
-            
-            _lastLogTime = DateTime.Now; // 更新列印時間
-            _isMatchEnded = false; 
+        RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
+            _isMatchEnded = true;
             return HookResult.Continue;
         });
 
-        // 玩家斷線
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
             if (@event.Userid == null || _isMatchEnded || _isResetting) return HookResult.Continue;
             var player = @event.Userid;
+            
             if (player.TeamNum <= 1) return HookResult.Continue;
 
             AddTimer(1.5f, () => HandlePlayerLeave(player.PlayerName, true)); 
             return HookResult.Continue;
         });
 
-        // 玩家換隊 (觀戰)
         RegisterEventHandler<EventPlayerTeam>((@event, info) => {
             if (@event.Userid == null || !@event.Userid.IsValid || _isMatchEnded || _isResetting) 
                 return HookResult.Continue;
@@ -57,9 +50,10 @@ public class OneVOneReset : BasePlugin
                     if (activeCount < 2)
                     {
                         Server.PrintToChatAll($"{_prefix}玩 家 \x10{player.PlayerName}\x01 切 換 到 \x10觀 戰 \x01比 賽 已 中 止");
+                        // --- 跳觀戰的中止日誌 ---
                         Console.WriteLine($"[1V1 Log] 玩家 {player.PlayerName} 跳往觀戰，比賽中止。");
                         
-                        AddTimer(3.5f, () => {
+                        AddTimer(4.0f, () => {
                             if (!_isResetting && !_isMatchEnded)
                                 Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
                         });
@@ -84,6 +78,7 @@ public class OneVOneReset : BasePlugin
     private void HandlePlayerLeave(string playerName, bool isDisconnect)
     {
         if (_isResetting || _isMatchEnded) return;
+
         int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
         int totalHumanPlayers = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && p.TeamNum >= 1);
 
@@ -93,13 +88,17 @@ public class OneVOneReset : BasePlugin
             {
                 Console.WriteLine($"[1V1 Log] 完全空城，執行重置。");
                 _isResetting = true;
+                _lastResetTime = DateTime.Now;
                 AddTimer(6.0f, () => { ExecuteForceReset(); });
             }
             else if (isDisconnect && activeCount == 1) 
             {
                 Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01比 賽 已 中 止");
-                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線，比賽中止 (尚有觀戰者，不重啟)。");
-                AddTimer(3.5f, () => {
+                
+                // --- 補上這行：斷線的中止日誌 ---
+                Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線，比賽中止。");
+
+                AddTimer(4.0f, () => {
                     if (!_isResetting && !_isMatchEnded)
                         Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
                 });
@@ -110,6 +109,7 @@ public class OneVOneReset : BasePlugin
     private void ExecuteForceReset()
     {
         Server.ExecuteCommand($"ds_workshop_changelevel {Server.MapName}");
+        
         _isResetting = false;
         _isMatchEnded = false;
         Console.WriteLine($"[1V1 Log] 執行地圖重換，伺服器已自動初始化。");
