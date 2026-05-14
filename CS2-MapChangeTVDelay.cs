@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "2.1.0"; 
+    public override string ModuleVersion => "2.1.1"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isResetting = false;
@@ -20,20 +20,14 @@ public class OneVOneReset : BasePlugin
     {
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
-        // --- 修改：捕捉「比賽開始」事件 (對應玩家輸入 !r 成功後) ---
+        // 捕捉「比賽啟動」事件：不論是地圖剛開或是補位後輸入 !R 都會觸發
         RegisterEventHandler<EventMatchStart>((@event, info) => {
-            // 這行只會在比賽正式啟動（從熱身進入正式比賽）時噴一次
             Console.WriteLine($"[1V1 Log] >>> 玩家已輸入 !R，比賽正式啟動 (VProfLite 同步檢測中) <<<");
-            _isMatchEnded = false; // 重設結束狀態
+            _isMatchEnded = false; 
             return HookResult.Continue;
         });
 
-        // 比賽總局數打完（如 16:0 結束）
-        RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
-            _isMatchEnded = true;
-            Console.WriteLine($"[1V1 Log] 比賽正式結束 (Match Panel Displayed)。");
-            return HookResult.Continue;
-        });
+        // 已刪除 EventCsWinPanelMatch (因為換圖會自動清理，不需額外顯示)
 
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
             if (@event.Userid == null || _isMatchEnded || _isResetting) return HookResult.Continue;
@@ -60,7 +54,7 @@ public class OneVOneReset : BasePlugin
                         
                         AddTimer(4.0f, () => {
                             if (!_isResetting && !_isMatchEnded)
-                                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 開始");
+                                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
                         });
                     }
                 });
@@ -70,7 +64,6 @@ public class OneVOneReset : BasePlugin
         });
     }
 
-    // ... (其餘 OnGsCommand, HandlePlayerLeave, ExecuteForceReset 邏輯保持不變)
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return;
