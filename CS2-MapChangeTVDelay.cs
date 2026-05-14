@@ -113,7 +113,7 @@ public class OneVOneReset : BasePlugin
         {
             if (totalHumanPlayers == 0) 
             {
-                Console.WriteLine($"[1V1 Log] 完全空城且非熱身，執行重置。");
+                Console.WriteLine($"[1V1 Log] 完全空城，執行重置。");
                 _isResetting = true;
                 _disconnectingPlayers.Clear();
                 AddTimer(6.0f, () => { ExecuteForceReset(); });
