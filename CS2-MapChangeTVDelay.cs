@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "2.1.7"; 
+    public override string ModuleVersion => "2.2.0"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isResetting = false;
@@ -28,14 +28,17 @@ public class OneVOneReset : BasePlugin
 
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
             if (@event.Userid == null || _isMatchEnded || _isResetting) return HookResult.Continue;
+            
             var player = @event.Userid;
-            if (player.TeamNum <= 1) return HookResult.Continue;
+            string playerName = player.PlayerName ?? "玩家";
+            ulong steamId = player.SteamID;
 
-            if (player.SteamID > 0) _disconnectingPlayers.Add(player.SteamID);
+            if (player.TeamNum <= 1) return HookResult.Continue;
+            if (steamId > 0) _disconnectingPlayers.Add(steamId);
 
             AddTimer(1.5f, () => {
-                HandlePlayerLeave(player.PlayerName, true);
-                _disconnectingPlayers.Remove(player.SteamID);
+                HandlePlayerLeave(playerName, true, steamId);
+                _disconnectingPlayers.Remove(steamId);
             }); 
             return HookResult.Continue;
         });
@@ -45,23 +48,28 @@ public class OneVOneReset : BasePlugin
                 return HookResult.Continue;
 
             var player = @event.Userid;
+            string playerName = player.PlayerName ?? "玩家";
+            ulong steamId = player.SteamID;
 
-            // --- 核心修正：檢查是否為最後一個真人 ---
-            // 如果伺服器扣除機器人後，真人數量 <= 1，代表這傢伙一走就空城了，不需要噴「跳往觀戰」
+            // 獲取當前是否正在熱身 (Warmup)
+            bool isWarmup = GameRules().WarmupPeriod;
+
             int realPlayerCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0);
-            if (realPlayerCount <= 1 || _disconnectingPlayers.Contains(player.SteamID)) 
+            
+            // 如果在熱身中，或者是最後一個真人，就完全不執行任何中止提示或邏輯
+            if (isWarmup || realPlayerCount <= 1 || _disconnectingPlayers.Contains(steamId)) 
                 return HookResult.Continue;
 
             if (@event.Oldteam > 1 && @event.Team <= 1)
             {
                 AddTimer(0.1f, () => {
-                    if (_disconnectingPlayers.Contains(player.SteamID)) return;
+                    if (_disconnectingPlayers.Contains(steamId)) return;
 
                     int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
                     if (activeCount < 2)
                     {
-                        Server.PrintToChatAll($"{_prefix}玩 家 \x10{player.PlayerName}\x01 切 換 到 \x10 觀 戰 \x01 比 賽 已 中 止");
-                        Console.WriteLine($"[1V1 Log] 玩家 {player.PlayerName} 跳往觀戰，比賽中止。");
+                        Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 切 換 到 \x10 觀 戰 \x01 比 賽 已 中 止");
+                        Console.WriteLine($"[1V1 Log] 玩家 {playerName} 跳往觀戰，比賽中止。");
                         
                         AddTimer(3.0f, () => {
                             if (!_isResetting && !_isMatchEnded)
@@ -69,7 +77,7 @@ public class OneVOneReset : BasePlugin
                         });
                     }
                 });
-                AddTimer(1.2f, () => HandlePlayerLeave(player.PlayerName, false));
+                AddTimer(1.2f, () => HandlePlayerLeave(playerName, false, steamId));
             }
             return HookResult.Continue;
         });
@@ -85,20 +93,26 @@ public class OneVOneReset : BasePlugin
         player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]   、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
     }
 
-    private void HandlePlayerLeave(string playerName, bool isDisconnect)
+    private void HandlePlayerLeave(string playerName, bool isDisconnect, ulong steamId)
     {
         if (_isResetting || _isMatchEnded) return;
 
+        // 再次檢查是否為熱身階段
+        bool isWarmup = GameRules().WarmupPeriod;
+        
         int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
         int totalHumanPlayers = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && p.TeamNum >= 1);
 
         if (activeCount < 2)
         {
+            // 如果正在熱身模式，直接跳過重啟邏輯
+            if (isWarmup) return;
+
             if (totalHumanPlayers == 0) 
             {
-                // 空城時，只會在這裡噴出一條 LOG，不會有前面的「跳往觀戰」
-                Console.WriteLine($"[1V1 Log] 完全空城，執行重置。");
+                Console.WriteLine($"[1V1 Log] 完全空城且非熱身，執行重置。");
                 _isResetting = true;
+                _disconnectingPlayers.Clear();
                 AddTimer(6.0f, () => { ExecuteForceReset(); });
             }
             else if (isDisconnect && activeCount == 1) 
@@ -120,5 +134,11 @@ public class OneVOneReset : BasePlugin
         _isResetting = false;
         _isMatchEnded = false;
         Console.WriteLine($"[1V1 Log] 執行地圖重換，伺服器已自動初始化。");
+    }
+
+    // 輔助函式：安全獲取遊戲規則
+    private CGameRules GameRules()
+    {
+        return Utilities.FindAllEntitiesByDesignerName<CGameRulesProxy>("gamerules").First().GameRules!;
     }
 }
