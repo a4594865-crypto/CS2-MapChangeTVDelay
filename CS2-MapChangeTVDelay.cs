@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 智能提示與重啟控制";
-    public override string ModuleVersion => "2.0.0"; 
+    public override string ModuleVersion => "2.1.0"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isResetting = false;
@@ -20,23 +20,18 @@ public class OneVOneReset : BasePlugin
     {
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
-        // --- 新增：捕捉回合開始事件 ---
-        RegisterEventHandler<EventRoundStart>((@event, info) => {
-            // 檢查是否為正式回合（非熱身、且場上有2人）
-            int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
-            
-            // 如果場上有 2 人對打，就印出開始 LOG
-            if (activeCount == 2)
-            {
-                Console.WriteLine($"[1V1 Log] >>> 比賽回合正式開始 (對戰檢測啟動) <<<");
-            }
+        // --- 修改：捕捉「比賽開始」事件 (對應玩家輸入 !r 成功後) ---
+        RegisterEventHandler<EventMatchStart>((@event, info) => {
+            // 這行只會在比賽正式啟動（從熱身進入正式比賽）時噴一次
+            Console.WriteLine($"[1V1 Log] >>> 玩家已輸入 !R，比賽正式啟動 (VProfLite 同步檢測中) <<<");
+            _isMatchEnded = false; // 重設結束狀態
             return HookResult.Continue;
         });
 
-        // 比賽正式結束（如一方拿到 16 分）
+        // 比賽總局數打完（如 16:0 結束）
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
             _isMatchEnded = true;
-            Console.WriteLine($"[1V1 Log] 比賽總局數已達上限，比賽結束。");
+            Console.WriteLine($"[1V1 Log] 比賽正式結束 (Match Panel Displayed)。");
             return HookResult.Continue;
         });
 
@@ -65,7 +60,7 @@ public class OneVOneReset : BasePlugin
                         
                         AddTimer(4.0f, () => {
                             if (!_isResetting && !_isMatchEnded)
-                                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
+                                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 開始");
                         });
                     }
                 });
@@ -75,6 +70,7 @@ public class OneVOneReset : BasePlugin
         });
     }
 
+    // ... (其餘 OnGsCommand, HandlePlayerLeave, ExecuteForceReset 邏輯保持不變)
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return;
@@ -88,7 +84,6 @@ public class OneVOneReset : BasePlugin
     private void HandlePlayerLeave(string playerName, bool isDisconnect)
     {
         if (_isResetting || _isMatchEnded) return;
-
         int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
         int totalHumanPlayers = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && p.TeamNum >= 1);
 
@@ -104,7 +99,6 @@ public class OneVOneReset : BasePlugin
             {
                 Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01比 賽 已 中 止");
                 Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線，比賽中止 (尚有觀戰者，不重啟)。");
-
                 AddTimer(4.0f, () => {
                     if (!_isResetting && !_isMatchEnded)
                         Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
