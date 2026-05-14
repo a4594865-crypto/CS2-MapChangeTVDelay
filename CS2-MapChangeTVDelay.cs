@@ -60,12 +60,12 @@ public class OneVOneReset : BasePlugin
                     int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
                     if (activeCount < 2)
                     {
-                        Server.PrintToChatAll($"{_prefix}玩 家 \x10{player.PlayerName}\x01 切 換 到 \x10觀 戰 \x01比 賽 已 中 止");
+                        Server.PrintToChatAll($"{_prefix}玩 家 \x10{player.PlayerName}\x01 切 換 到 \x10 觀 戰 \x01 比 賽 已 中 止");
                         Console.WriteLine($"[1V1 Log] 玩家 {player.PlayerName} 跳往觀戰，比賽中止。");
                         
                         AddTimer(3.0f, () => {
                             if (!_isResetting && !_isMatchEnded)
-                                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10!R \x01重 新 對 戰 開 始");
+                                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
                         });
                     }
                 });
@@ -103,7 +103,7 @@ public class OneVOneReset : BasePlugin
             }
             else if (isDisconnect && activeCount == 1) 
             {
-                Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01比 賽 已 中 止");
+                Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01 比 賽 已 中 止");
                 Console.WriteLine($"[1V1 Log] 玩家 {playerName} 跳 出 斷 線，比賽中止。");
 
                 AddTimer(3.0f, () => {
