@@ -127,7 +127,7 @@ public class OneVOneReset : BasePlugin
             // 後台 Log
             Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線離場，比賽已中止");
             
-            AddTimer(3.0f, () => {
+            AddTimer(2.0f, () => {
                 if (!_isMatchEnded)
                     Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
             });
