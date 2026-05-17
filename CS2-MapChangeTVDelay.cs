@@ -131,6 +131,7 @@ public class OneVOneReset : BasePlugin
             if (!_isMatchEnded)
             {
                 Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
-            }
+           }
         }
     }
+}
