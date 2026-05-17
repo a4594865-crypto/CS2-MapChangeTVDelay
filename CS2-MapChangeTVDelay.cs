@@ -111,26 +111,26 @@ public class OneVOneReset : BasePlugin
         player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]   、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
     }
 
-    private void HandlePlayerDisconnectMsg(string playerName)
-    {
-        if (IsInWarmup() || _isMatchEnded) return;
+  private void HandlePlayerDisconnectMsg(string playerName)
+    {
+        if (IsInWarmup() || _isMatchEnded) return;
 
-        // 計算目前場上還留在 2(T) 或 3(CT) 隊伍中的真實玩家人數
-        int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
+        // 計算目前場上還留在 2(T) 或 3(CT) 隊伍中的真實玩家人數
+        int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
 
-        // 因為有人斷線了，場上活躍人數如果小於 2 (通常剩 1 人)，就觸發中止對戰提示
-        if (activeCount < 2)
-        {
-            // 遊戲內廣播
-            Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01 比 賽 已 中 止");
-            
-            // 後台 Log
-            Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線離場，比賽已中止");
-            
-            AddTimer(0.1f, () => {
-                if (!_isMatchEnded)
-                    Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
-            });
-        }
-    }
-}
+        // 因為有人斷線了，場上活躍人數如果小於 2 (通常剩 1 人)，就觸發中止對戰提示
+        if (activeCount < 2)
+        {
+            // 遊戲內廣播：玩家跳出
+            Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01 比 賽 已 中 止");
+            
+            // 後台 Log
+            Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線離場，比賽已中止");
+            
+            // 【完全移除 AddTimer】直接在當下判斷並發送提示，不再浪費伺服器效能去建立監聽
+            if (!_isMatchEnded)
+            {
+                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
+            }
+        }
+    }
