@@ -10,10 +10,13 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 訊息提示與 Log 監控";
-    public override string ModuleVersion => "2.6.5"; 
+    public override string ModuleVersion => "2.6.7"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isMatchEnded = false;
+    
+    // 【全新防線】：全域開關，如果伺服器開始換地圖或關閉中，直接終止所有 Timer 執行
+    private bool _isServerShuttingDown = false; 
     private readonly System.Collections.Generic.HashSet<ulong> _disconnectingPlayers = new();
 
     private bool IsInWarmup()
@@ -24,23 +27,22 @@ public class OneVOneReset : BasePlugin
 
     public override void Load(bool hotReload)
     {
-        // [功能 1] 完整槍枝顯示指令
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
+        // 比賽正常結束
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
             _isMatchEnded = true;
             return HookResult.Continue;
         });
 
-        // [功能 2] 處理玩家離線 Log 與訊息（【完全維持舊版核心】0.0秒不攔截，完全交給 1.5 秒 Timer）
+        // [功能 2] 處理玩家離線 Log 與訊息
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
-            if (IsInWarmup() || @event.Userid == null || _isMatchEnded) 
+            if (IsInWarmup() || @event.Userid == null || _isMatchEnded || _isServerShuttingDown) 
                 return HookResult.Continue;
 
             var player = @event.Userid;
             if (!player.IsValid || player.IsBot) return HookResult.Continue;
 
-            // 提前將名字與 SteamID 存成獨立變數，防止延遲後實體消失抓不到
             string cachedPlayerName = player.PlayerName;
             ulong cachedSteamId = player.SteamID;
 
@@ -49,11 +51,12 @@ public class OneVOneReset : BasePlugin
                 _disconnectingPlayers.Add(cachedSteamId);
             }
 
-            // 斷線時立刻輸出後台 Log，確保不漏資訊
             Console.WriteLine($"[1V1 Log] 偵測到玩家 {cachedPlayerName} ({cachedSteamId}) 正在中斷連線...");
 
             AddTimer(1.5f, () => {
-                // 延遲後直接呼叫客製化的斷線廣播
+                // 1.5秒時間到時，如果伺服器正在換地圖（_isServerShuttingDown == true），直接自毀，什麼都不執行！
+                if (_isServerShuttingDown) return;
+
                 HandlePlayerDisconnectMsg(cachedPlayerName);
                 _disconnectingPlayers.Remove(cachedSteamId);
             }); 
@@ -62,7 +65,7 @@ public class OneVOneReset : BasePlugin
 
         // [功能 3] 處理玩家換隊 Log 與訊息 (跳觀戰)
         RegisterEventHandler<EventPlayerTeam>((@event, info) => {
-            if (IsInWarmup() || @event.Userid == null || !@event.Userid.IsValid || _isMatchEnded) 
+            if (IsInWarmup() || @event.Userid == null || !@event.Userid.IsValid || _isMatchEnded || _isServerShuttingDown) 
                 return HookResult.Continue;
 
             var player = @event.Userid;
@@ -78,19 +81,16 @@ public class OneVOneReset : BasePlugin
                 ulong cachedId = player.SteamID;
 
                 AddTimer(0.1f, () => {
-                    if (_disconnectingPlayers.Contains(cachedId)) return;
+                    if (_isServerShuttingDown || _disconnectingPlayers.Contains(cachedId)) return;
 
                     int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
                     if (activeCount < 2)
                     {
-                        // 遊戲內廣播
                         Server.PrintToChatAll($"{_prefix}玩 家 \x10{cachedName}\x01 切 換 到 \x10 觀 戰 \x01 比 賽 已 中 止");
-                        
-                        // 後台 Log
                         Console.WriteLine($"[1V1 Log] 玩家 {cachedName} 切換到觀戰，比賽已中止");
                         
                         AddTimer(3.0f, () => {
-                            if (!_isMatchEnded)
+                            if (!_isMatchEnded && !_isServerShuttingDown)
                                 Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
                         });
                     }
@@ -98,6 +98,13 @@ public class OneVOneReset : BasePlugin
             }
             return HookResult.Continue;
         });
+    }
+
+    // 🎯【核心修正】：利用 V 社底層過載（Override），當前地圖一旦卸載（換地圖或關閉伺服器），強制將開關打開！
+    public override void Unload(bool hotReload)
+    {
+        _isServerShuttingDown = true;
+        base.Unload(hotReload);
     }
 
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
@@ -111,34 +118,25 @@ public class OneVOneReset : BasePlugin
         player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]   、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
     }
 
-    // 【修改此處的判定邏輯：完美解決死角，同時100%保留舊版Timer流程】
     private void HandlePlayerDisconnectMsg(string playerName)
     {
-        if (IsInWarmup() || _isMatchEnded) return;
+        // 再次雙重防守
+        if (IsInWarmup() || _isMatchEnded || _isServerShuttingDown) return;
 
-        // 1.5 秒後，離開的人已經徹底蒸發。此時我們數一下伺服器「剩下的總人類數量」（包含觀戰席）
         int totalRealPlayersLeft = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0);
-
-        // 1.5 秒後，目前場上還留在 2(T) 或 3(CT) 隊伍中的真實玩家人數
         int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
 
-        // 🎯 修正一：如果 1.5 秒後發現伺服器空了（總人數 == 0），代表這是最後一個人離開，直接結束，完全不發訊息與 Log
         if (totalRealPlayersLeft == 0)
         {
             return;
         }
 
-        // 🎯 修正二：只有當場上打比賽的人「剛好剩 1 人」時，才代表剛剛走的是 1V1 的核心球員。觸發中止廣播！
-        // 如果 activeCount 是 2（代表走的是不影響比賽的觀戰玩家），則不會滿足這個條件，完美略過！
         if (activeCount == 1)
         {
-            // 遊戲內廣播：玩家跳出
             Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01 比 賽 已 中 止");
-            
-            // 後台 Log
             Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線離場，比賽已中止");
             
-            if (!_isMatchEnded)
+            if (!_isMatchEnded && !_isServerShuttingDown)
             {
                 Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
             }
