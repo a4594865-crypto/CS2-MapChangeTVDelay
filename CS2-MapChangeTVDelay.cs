@@ -10,12 +10,10 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 訊息提示與 Log 監控";
-    public override string ModuleVersion => "2.6.7"; 
+    public override string ModuleVersion => "2.6.8"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isMatchEnded = false;
-    
-    // 【全新防線】：全域開關，如果伺服器開始換地圖或關閉中，直接終止所有 Timer 執行
     private bool _isServerShuttingDown = false; 
     private readonly System.Collections.Generic.HashSet<ulong> _disconnectingPlayers = new();
 
@@ -29,7 +27,6 @@ public class OneVOneReset : BasePlugin
     {
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
-        // 比賽正常結束
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
             _isMatchEnded = true;
             return HookResult.Continue;
@@ -43,6 +40,12 @@ public class OneVOneReset : BasePlugin
             var player = @event.Userid;
             if (!player.IsValid || player.IsBot) return HookResult.Continue;
 
+            // 🎯【核心修正第一道防線】：在第 0.0 秒立刻檢查隊伍！
+            // 如果斷線的玩家在 觀戰席(1) 或 根本沒選隊伍(0)，直接攔截忽略
+            // 這樣純觀戰的 C 離開時，後台就絕對不會印出任何「正在中斷連線」的 Log！
+            if (player.TeamNum <= 1)
+                return HookResult.Continue;
+
             string cachedPlayerName = player.PlayerName;
             ulong cachedSteamId = player.SteamID;
 
@@ -51,10 +54,10 @@ public class OneVOneReset : BasePlugin
                 _disconnectingPlayers.Add(cachedSteamId);
             }
 
-            Console.WriteLine($"[1V1 Log] 偵測到玩家 {cachedPlayerName} ({cachedSteamId}) 正在中斷連線...");
+            // 只有真正在場上打比賽（T或CT）的人離開，後台才會印這行！
+            Console.WriteLine($"[1V1 Log] 偵測到比賽中玩家 {cachedPlayerName} ({cachedSteamId}) 正在中斷連線...");
 
             AddTimer(1.5f, () => {
-                // 1.5秒時間到時，如果伺服器正在換地圖（_isServerShuttingDown == true），直接自毀，什麼都不執行！
                 if (_isServerShuttingDown) return;
 
                 HandlePlayerDisconnectMsg(cachedPlayerName);
@@ -100,7 +103,6 @@ public class OneVOneReset : BasePlugin
         });
     }
 
-    // 🎯【核心修正】：利用 V 社底層過載（Override），當前地圖一旦卸載（換地圖或關閉伺服器），強制將開關打開！
     public override void Unload(bool hotReload)
     {
         _isServerShuttingDown = true;
@@ -111,7 +113,7 @@ public class OneVOneReset : BasePlugin
     {
         if (player == null || !player.IsValid) return;
         
-        player.PrintToChat($" {ChatColors.Orange}可 在 聊 天 欄 位 輸 入 您 要 的 武器，以 下 是 常 用 武 器");
+        player.PrintToChat($" {ChatColors.Orange}可 在 聊 天 欄 位 輸 入 您 要 的 武器，以 下 是 常 用 武器");
         player.PrintToChat($" -----------------------------------------------------------------");
         player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙漠之鷹 ]   、 {ChatColors.Blue}!usp {ChatColors.White}[ USP-S ]   、 {ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]");
         player.PrintToChat($" [ {ChatColors.Green}步槍{ChatColors.White} ] {ChatColors.Green}!ak {ChatColors.White}[ AK-47 ]   、 {ChatColors.Green}!a1 {ChatColors.White}[ M4-A1 ]   、 {ChatColors.Green}!a4 {ChatColors.White}[ M4-A4 ]");
@@ -120,7 +122,6 @@ public class OneVOneReset : BasePlugin
 
     private void HandlePlayerDisconnectMsg(string playerName)
     {
-        // 再次雙重防守
         if (IsInWarmup() || _isMatchEnded || _isServerShuttingDown) return;
 
         int totalRealPlayersLeft = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0);
