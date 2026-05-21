@@ -114,11 +114,11 @@ public class OneVOneReset : BasePlugin
 
         // 根據隊伍分配前綴
         string senderPrefix = (player.TeamNum == (byte)CsTeam.Spectator) 
-            ? $" [{ChatColors.Red}觀 戰 者]{ChatColors.White}" 
-            : $" [{ChatColors.Grey}對 戰]{ChatColors.White}";
+            ? $" [所有人]{ChatColors.White}" 
+            : $" [所有人]{ChatColors.White}";
 
         // 強制全體廣播
-        Server.PrintToChatAll($"{senderPrefix} {playerName}: {message}");
+        Server.PrintToChatAll($"{senderPrefix} {playerName}：{message}");
 
         // 阻斷原本的聊天訊息，避免畫面上出現兩次
         return HookResult.Handled;
