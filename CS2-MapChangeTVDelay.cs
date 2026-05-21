@@ -99,6 +99,7 @@ public class OneVOneReset : BasePlugin
     }
 
     // 處理打字指令的專用方法
+// 處理打字指令的專用方法
 private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
 {
     if (player == null || !player.IsValid) return HookResult.Continue;
@@ -112,10 +113,31 @@ private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     // 如果是指令開頭(如 !r, !ak, /r)，跳過不處理，放行給系統和其他插件
     if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
 
-    // [全面改用原生碼] 
-    // \x01 代表重置為白色
-    // \x03 代表自動套用該玩家的隊伍原色（CT亮藍、T橘紅、觀戰灰）
-    Server.PrintToChatAll($" \x01[所有人]\x01 \x03{playerName}\x01：{message}");
+    // 讓 [所有人] 前綴保持乾淨的白字
+    string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
+    
+    // 預設名字顏色為白色
+    string nameColor = $"{ChatColors.White}";
+
+    // 分成三個隊伍手動強制給顏色：
+    // 1 = 觀戰者 (Spectator) -> 修正為原生灰色
+    // 2 = T (Terrorist)       -> 橘紅色
+    // 3 = CT (Counter-Terrorist) -> 亮藍色
+    if (player.TeamNum == 1)
+    {
+        nameColor = $"{ChatColors.Grey}"; // 觀戰灰
+    }
+    else if (player.TeamNum == 2)
+    {
+        nameColor = $"{ChatColors.Orange}"; // T 橘紅
+    }
+    else if (player.TeamNum == 3)
+    {
+        nameColor = $"{ChatColors.LightBlue}"; // 正宗 CT 亮藍
+    }
+
+    // 強制全體廣播：[所有人] 名字(強制色彩) : 訊息(白字)
+    Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
 
     // 阻斷原本的聊天訊息，避免畫面上出現兩次
     return HookResult.Handled;
