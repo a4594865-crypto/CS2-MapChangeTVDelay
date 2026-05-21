@@ -99,28 +99,22 @@ public class OneVOneReset : BasePlugin
     }
 
     // 處理打字指令的專用方法
-   // 處理打字指令的專用方法
-// 處理打字指令的專用方法
 private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
 {
     if (player == null || !player.IsValid) return HookResult.Continue;
 
-    // 抓取字串最乾淨、最省效能且最安全
     string message = info.GetArg(1).Trim(); 
     string playerName = player.PlayerName;
 
     if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
 
-    // 如果是指令開頭(如 !r, !ak, /r)，跳過不處理，放行給系統和其他插件
     if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
 
-    // 讓 [所有人] 前綴保持乾淨的白字
     string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
 
-    // ChatColors.TeamColor 才是真正觸發 CS2 原生隊伍染色的關鍵字！
-    Server.PrintToChatAll($"{senderPrefix} {ChatColors.TeamColor}{playerName}{ChatColors.White}：{message}");
+    // [修正] 改用 ChatColors.Team，這才是正確的 CounterStrikeSharp 語法
+    Server.PrintToChatAll($"{senderPrefix} {ChatColors.Team}{playerName}{ChatColors.White}：{message}");
 
-    // 阻斷原本的聊天訊息，避免畫面上出現兩次
     return HookResult.Handled;
 }
     public override void Unload(bool hotReload)
