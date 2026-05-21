@@ -27,28 +27,9 @@ public class OneVOneReset : BasePlugin
     {
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
-        // [已修正] 將 EventPlayerChat 改為 PlayerChatEvent，並修正為 @event.Player
-        RegisterEventHandler<PlayerChatEvent>((@event, info) =>
-        {
-            var player = @event.Player;
-            if (player == null || !player.IsValid) return HookResult.Continue;
-
-            string message = @event.Text;
-            string playerName = player.PlayerName;
-            
-            // 如果是指令開頭(如!r, !ak)，讓它繼續讓原本的指令系統處理
-            if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
-
-            string senderPrefix = (player.TeamNum == (byte)CsTeam.Spectator) 
-                ? $" [{ChatColors.Red}觀 戰 者{ChatColors.White}]{ChatColors.White}" 
-                : $" [{ChatColors.Grey}對 戰{ChatColors.White}]{ChatColors.White}";
-
-            // 強制全體廣播
-            Server.PrintToChatAll($"{senderPrefix} {playerName}: {message}");
-
-            // 阻止原本的訊息行為，避免重複顯示
-            return HookResult.Stop;
-        });
+        // [終極解決方案] 拋棄不穩定的事件監聽，直接監聽伺服器 say 和 say_team 全體打字指令
+        AddCommandListener("say", OnPlayerSay);
+        AddCommandListener("say_team", OnPlayerSay);
 
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
             _isMatchEnded = true;
@@ -115,6 +96,32 @@ public class OneVOneReset : BasePlugin
             }
             return HookResult.Continue;
         });
+    }
+
+    // 處理打字指令的專用方法
+    private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player == null || !player.IsValid) return HookResult.Continue;
+
+        // 獲取玩家輸入的完整內文
+        string message = info.ArgString.Trim('"'); 
+        string playerName = player.PlayerName;
+
+        if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
+
+        // 如果是指令開頭(如 !r, !ak, /r)，跳過不處理，放行給系統和其他插件
+        if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
+
+        // 根據隊伍分配前綴
+        string senderPrefix = (player.TeamNum == (byte)CsTeam.Spectator) 
+            ? $" [{ChatColors.Red}觀 戰 者]{ChatColors.White}" 
+            : $" [{ChatColors.Grey}對 戰]{ChatColors.White}";
+
+        // 強制全體廣播
+        Server.PrintToChatAll($"{senderPrefix} {playerName}: {message}");
+
+        // 阻斷原本的聊天訊息，避免畫面上出現兩次
+        return HookResult.Handled;
     }
 
     public override void Unload(bool hotReload)
