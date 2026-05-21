@@ -115,7 +115,7 @@ private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     // [全面改用原生碼] 
     // \x01 代表重置為白色
     // \x03 代表自動套用該玩家的隊伍原色（CT亮藍、T橘紅、觀戰灰）
-    Server.PrintToChatAll($" \x01[所有人]\x01 \x03{playerName}\x01 :  {message}");
+    Server.PrintToChatAll($" \x01[所有人]\x01 \x03{playerName}\x01：{message}");
 
     // 阻斷原本的聊天訊息，避免畫面上出現兩次
     return HookResult.Handled;
