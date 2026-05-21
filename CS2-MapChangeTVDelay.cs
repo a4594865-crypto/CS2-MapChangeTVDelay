@@ -99,31 +99,31 @@ public class OneVOneReset : BasePlugin
     }
 
     // 處理打字指令的專用方法
-    private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
-    {
-        if (player == null || !player.IsValid) return HookResult.Continue;
+   // 處理打字指令的專用方法
+private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
+{
+    if (player == null || !player.IsValid) return HookResult.Continue;
 
-        // 獲取玩家輸入的完整內文
-        string message = info.ArgString.Trim('"'); 
-        string playerName = player.PlayerName;
+    // 抓取字串最乾淨、最省效能且最安全
+    string message = info.GetArg(1).Trim(); 
+    string playerName = player.PlayerName;
 
-        if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
+    if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
 
-        // 如果是指令開頭(如 !r, !ak, /r)，跳過不處理，放行給系統和其他插件
-        if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
+    // 如果是指令開頭(如 !r, !ak, /r)，跳過不處理，放行給系統和其他插件
+    if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
 
-        // 根據隊伍分配前綴
-        string senderPrefix = (player.TeamNum == (byte)CsTeam.Spectator) 
-            ? $" [所有人] {ChatColors.White}" 
-            : $" [所有人] {ChatColors.White}";
+    // 讓 [所有人] 前綴保持乾淨的白字（你可以根據喜好改成別的顏色）
+    string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
 
-        // 強制全體廣播
-        Server.PrintToChatAll($"{senderPrefix} {playerName}：{message}");
+    // [完美修正版] 
+    // ChatColors.Default 在玩家名字前，能讓 CS2 引擎自動套用該玩家的隊伍原色
+    // 名字印完後馬上用 ChatColors.White 把後面的冒號和聊天內文切回白色
+    Server.PrintToChatAll($"{senderPrefix} {ChatColors.Default}{playerName}{ChatColors.White}：{message}");
 
-        // 阻斷原本的聊天訊息，避免畫面上出現兩次
-        return HookResult.Handled;
-    }
-
+    // 阻斷原本的聊天訊息，避免畫面上出現兩次
+    return HookResult.Handled;
+}
     public override void Unload(bool hotReload)
     {
         _isServerShuttingDown = true;
