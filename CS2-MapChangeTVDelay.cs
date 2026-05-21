@@ -114,8 +114,8 @@ public class OneVOneReset : BasePlugin
 
         // 根據隊伍分配前綴
         string senderPrefix = (player.TeamNum == (byte)CsTeam.Spectator) 
-            ? $" [所有人]{ChatColors.White}" 
-            : $" [所有人]{ChatColors.White}";
+            ? $" [所有人] {ChatColors.White}" 
+            : $" [所有人] {ChatColors.White}";
 
         // 強制全體廣播
         Server.PrintToChatAll($"{senderPrefix} {playerName}：{message}");
