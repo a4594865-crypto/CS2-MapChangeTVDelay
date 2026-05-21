@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 訊息提示與 Log 監控";
-    public override string ModuleVersion => "2.6.8"; 
+    public override string ModuleVersion => "2.6.9"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isMatchEnded = false;
@@ -27,6 +27,33 @@ public class OneVOneReset : BasePlugin
     {
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
+        // [功能新增] 雙向聊天轉發 (選手<->觀戰者)
+        RegisterEventHandler<EventPlayerChat>((@event, info) =>
+        {
+            var player = @event.Userid;
+            if (player == null || !player.IsValid) return HookResult.Continue;
+
+            string message = @event.Text;
+            var allPlayers = Utilities.GetPlayers();
+
+            // 1. 如果是比賽中的選手發言 (T=2, CT=3) -> 轉發給所有觀戰者
+            if (player.TeamNum == (byte)CsTeam.Terrorist || player.TeamNum == (byte)CsTeam.CounterTerrorist)
+            {
+                foreach (var p in allPlayers.Where(p => p.IsValid && p.TeamNum == (byte)CsTeam.Spectator))
+                {
+                    p.PrintToChat($" {ChatColors.Grey}[觀賽] {ChatColors.White}{player.PlayerName}: {message}");
+                }
+            }
+            // 2. 如果是觀戰者發言 -> 強制廣播給所有人 (選手 + 其他觀戰者)
+            else if (player.TeamNum == (byte)CsTeam.Spectator)
+            {
+                Server.PrintToChatAll($" {ChatColors.Red}[觀戰者] {ChatColors.White}{player.PlayerName}: {message}");
+                return HookResult.Stop; // 阻止原訊息丟失
+            }
+
+            return HookResult.Continue;
+        });
+
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
             _isMatchEnded = true;
             return HookResult.Continue;
@@ -40,33 +67,24 @@ public class OneVOneReset : BasePlugin
             var player = @event.Userid;
             if (!player.IsValid || player.IsBot) return HookResult.Continue;
 
-            // 🎯【核心修正第一道防線】：在第 0.0 秒立刻檢查隊伍！
-            // 如果斷線的玩家在 觀戰席(1) 或 根本沒選隊伍(0)，直接攔截忽略
-            // 這樣純觀戰的 C 離開時，後台就絕對不會印出任何「正在中斷連線」的 Log！
-            if (player.TeamNum <= 1)
-                return HookResult.Continue;
+            if (player.TeamNum <= 1) return HookResult.Continue;
 
             string cachedPlayerName = player.PlayerName;
             ulong cachedSteamId = player.SteamID;
 
-            if (cachedSteamId > 0) 
-            {
-                _disconnectingPlayers.Add(cachedSteamId);
-            }
+            if (cachedSteamId > 0) _disconnectingPlayers.Add(cachedSteamId);
 
-            // 只有真正在場上打比賽（T或CT）的人離開，後台才會印這行！
             Console.WriteLine($"[1V1 Log] 偵測到比賽中玩家 {cachedPlayerName} ({cachedSteamId}) 正在中斷連線...");
 
             AddTimer(1.5f, () => {
                 if (_isServerShuttingDown) return;
-
                 HandlePlayerDisconnectMsg(cachedPlayerName);
                 _disconnectingPlayers.Remove(cachedSteamId);
             }); 
             return HookResult.Continue;
         });
 
-        // [功能 3] 處理玩家換隊 Log 與訊息 (跳觀戰)
+        // [功能 3] 處理玩家換隊 Log 與訊息
         RegisterEventHandler<EventPlayerTeam>((@event, info) => {
             if (IsInWarmup() || @event.Userid == null || !@event.Userid.IsValid || _isMatchEnded || _isServerShuttingDown) 
                 return HookResult.Continue;
@@ -115,22 +133,16 @@ public class OneVOneReset : BasePlugin
         
         player.PrintToChat($" {ChatColors.Orange}可 在 聊 天 欄 位 輸 入 您 要 的 武器，以 下 是 常 用 武器");
         player.PrintToChat($" -----------------------------------------------------------------");
-        player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙漠之鷹 ]   、 {ChatColors.Blue}!usp {ChatColors.White}[ USP-S ]   、 {ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]");
-        player.PrintToChat($" [ {ChatColors.Green}步槍{ChatColors.White} ] {ChatColors.Green}!ak {ChatColors.White}[ AK-47 ]   、 {ChatColors.Green}!a1 {ChatColors.White}[ M4-A1 ]   、 {ChatColors.Green}!a4 {ChatColors.White}[ M4-A4 ]");
-        player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]   、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
+        player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙漠之鷹 ]    、 {ChatColors.Blue}!usp {ChatColors.White}[ USP-S ]    、 {ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]");
+        player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]    、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
+        player.PrintToChat($" [ {ChatColors.Green}步槍{ChatColors.White} ] {ChatColors.Green}!ak {ChatColors.White}[ AK-47 ]    、 {ChatColors.Green}!a1 {ChatColors.White}[ M4-A1 ]    、 {ChatColors.Green}!a4 {ChatColors.White}[ M4-A4 ]");
     }
 
     private void HandlePlayerDisconnectMsg(string playerName)
     {
         if (IsInWarmup() || _isMatchEnded || _isServerShuttingDown) return;
 
-        int totalRealPlayersLeft = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0);
         int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
-
-        if (totalRealPlayersLeft == 0)
-        {
-            return;
-        }
 
         if (activeCount == 1)
         {
