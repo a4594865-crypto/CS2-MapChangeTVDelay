@@ -129,7 +129,7 @@ private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     }
     else if (player.TeamNum == 2)
     {
-        nameColor = $"\x10"; // T 橘紅
+        nameColor = $"\x0C"; // T 橘紅
     }
     else if (player.TeamNum == 3)
     {
