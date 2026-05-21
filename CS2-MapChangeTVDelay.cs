@@ -27,31 +27,27 @@ public class OneVOneReset : BasePlugin
     {
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
-        // [功能新增] 雙向聊天轉發 (選手<->觀戰者)
+        // [功能新增] 將所有人的聊天訊息統一強制轉為全體訊息
         RegisterEventHandler<EventPlayerChat>((@event, info) =>
         {
             var player = @event.Userid;
             if (player == null || !player.IsValid) return HookResult.Continue;
 
             string message = @event.Text;
-            var allPlayers = Utilities.GetPlayers();
+            string playerName = player.PlayerName;
+            
+            // 如果是指令開頭(如!r, !ak)，讓它繼續讓原本的指令系統處理
+            if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
 
-            // 1. 如果是比賽中的選手發言 (T=2, CT=3) -> 轉發給所有觀戰者
-            if (player.TeamNum == (byte)CsTeam.Terrorist || player.TeamNum == (byte)CsTeam.CounterTerrorist)
-            {
-                foreach (var p in allPlayers.Where(p => p.IsValid && p.TeamNum == (byte)CsTeam.Spectator))
-                {
-                    p.PrintToChat($" {ChatColors.Grey}[觀賽] {ChatColors.White}{player.PlayerName}: {message}");
-                }
-            }
-            // 2. 如果是觀戰者發言 -> 強制廣播給所有人 (選手 + 其他觀戰者)
-            else if (player.TeamNum == (byte)CsTeam.Spectator)
-            {
-                Server.PrintToChatAll($" {ChatColors.Red}[觀戰者] {ChatColors.White}{player.PlayerName}: {message}");
-                return HookResult.Stop; // 阻止原訊息丟失
-            }
+            string senderPrefix = (player.TeamNum == (byte)CsTeam.Spectator) 
+                ? $" [{ChatColors.Red}觀 戰 者] {ChatColors.White}" 
+                : $" [{ChatColors.Red}對 戰] {ChatColors.White}";
 
-            return HookResult.Continue;
+            // 強制全體廣播
+            Server.PrintToChatAll($"{senderPrefix} {playerName}: {message}");
+
+            // 阻止原本的訊息行為，避免重複顯示
+            return HookResult.Stop;
         });
 
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
@@ -133,9 +129,9 @@ public class OneVOneReset : BasePlugin
         
         player.PrintToChat($" {ChatColors.Orange}可 在 聊 天 欄 位 輸 入 您 要 的 武器，以 下 是 常 用 武器");
         player.PrintToChat($" -----------------------------------------------------------------");
-        player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙漠之鷹 ]    、 {ChatColors.Blue}!usp {ChatColors.White}[ USP-S ]    、 {ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]");
-        player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]    、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
-        player.PrintToChat($" [ {ChatColors.Green}步槍{ChatColors.White} ] {ChatColors.Green}!ak {ChatColors.White}[ AK-47 ]    、 {ChatColors.Green}!a1 {ChatColors.White}[ M4-A1 ]    、 {ChatColors.Green}!a4 {ChatColors.White}[ M4-A4 ]");
+        player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙漠之鷹 ]     、 {ChatColors.Blue}!usp {ChatColors.White}[ USP-S ]     、 {ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]");
+        player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]     、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
+        player.PrintToChat($" [ {ChatColors.Green}步槍{ChatColors.White} ] {ChatColors.Green}!ak {ChatColors.White}[ AK-47 ]     、 {ChatColors.Green}!a1 {ChatColors.White}[ M4-A1 ]     、 {ChatColors.Green}!a4 {ChatColors.White}[ M4-A4 ]");
     }
 
     private void HandlePlayerDisconnectMsg(string playerName)
