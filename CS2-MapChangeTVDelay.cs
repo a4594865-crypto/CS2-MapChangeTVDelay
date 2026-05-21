@@ -129,11 +129,11 @@ private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     }
     else if (player.TeamNum == 2)
     {
-        nameColor = $"\x10"; // T 橘紅
+        nameColor = $"\x03"; // T 橘紅
     }
     else if (player.TeamNum == 3)
     {
-        nameColor = $"\x0B"; // 正宗 CT 亮藍
+        nameColor = $"\x03"; // 正宗 CT 亮藍
     }
 
     // 強制全體廣播：[所有人] 名字(強制色彩) : 訊息(白字)
