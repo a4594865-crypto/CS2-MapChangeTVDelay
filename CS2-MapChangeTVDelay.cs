@@ -103,18 +103,21 @@ private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
 {
     if (player == null || !player.IsValid) return HookResult.Continue;
 
+    // 抓取字串最乾淨、最省效能且最安全
     string message = info.GetArg(1).Trim(); 
     string playerName = player.PlayerName;
 
     if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
 
+    // 如果是指令開頭(如 !r, !ak, /r)，跳過不處理，放行給系統和其他插件
     if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
 
-    string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
+    // [全面改用原生碼] 
+    // \x01 代表重置為白色
+    // \x03 代表自動套用該玩家的隊伍原色（CT亮藍、T橘紅、觀戰灰）
+    Server.PrintToChatAll($" \x01[所有人]\x01 \x03{playerName}\x01 :  {message}");
 
-    // [修正] 改用 ChatColors.Team，這才是正確的 CounterStrikeSharp 語法
-    Server.PrintToChatAll($"{senderPrefix} {ChatColors.Team}{playerName}{ChatColors.White}：{message}");
-
+    // 阻斷原本的聊天訊息，避免畫面上出現兩次
     return HookResult.Handled;
 }
     public override void Unload(bool hotReload)
