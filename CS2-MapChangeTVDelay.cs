@@ -27,10 +27,10 @@ public class OneVOneReset : BasePlugin
     {
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
-        // [功能新增] 將所有人的聊天訊息統一強制轉為全體訊息
-        RegisterEventHandler<EventPlayerChat>((@event, info) =>
+        // [已修正] 將 EventPlayerChat 改為 PlayerChatEvent，並修正為 @event.Player
+        RegisterEventHandler<PlayerChatEvent>((@event, info) =>
         {
-            var player = @event.Userid;
+            var player = @event.Player;
             if (player == null || !player.IsValid) return HookResult.Continue;
 
             string message = @event.Text;
@@ -40,8 +40,8 @@ public class OneVOneReset : BasePlugin
             if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
 
             string senderPrefix = (player.TeamNum == (byte)CsTeam.Spectator) 
-                ? $" [{ChatColors.Red}觀 戰 者] {ChatColors.White}" 
-                : $" [{ChatColors.Red}對 戰] {ChatColors.White}";
+                ? $" [{ChatColors.Red}觀 戰 者{ChatColors.White}]{ChatColors.White}" 
+                : $" [{ChatColors.Grey}對 戰{ChatColors.White}]{ChatColors.White}";
 
             // 強制全體廣播
             Server.PrintToChatAll($"{senderPrefix} {playerName}: {message}");
@@ -127,7 +127,7 @@ public class OneVOneReset : BasePlugin
     {
         if (player == null || !player.IsValid) return;
         
-        player.PrintToChat($" {ChatColors.Orange}可 在 聊 天 欄 位 輸 入 您 要 的 武器，以 下 是 常 用 武器");
+        player.PrintToChat($" {ChatColors.Orange}可 在 聊天 欄 位 輸 入 您 要 的 武器，以 下 是 常 用 武器");
         player.PrintToChat($" -----------------------------------------------------------------");
         player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙漠之鷹 ]     、 {ChatColors.Blue}!usp {ChatColors.White}[ USP-S ]     、 {ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]");
         player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]     、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
@@ -147,7 +147,7 @@ public class OneVOneReset : BasePlugin
             
             if (!_isMatchEnded && !_isServerShuttingDown)
             {
-                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
+                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
             }
         }
     }
