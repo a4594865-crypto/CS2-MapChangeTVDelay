@@ -100,6 +100,7 @@ public class OneVOneReset : BasePlugin
 
     // 處理打字指令的專用方法
    // 處理打字指令的專用方法
+// 處理打字指令的專用方法
 private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
 {
     if (player == null || !player.IsValid) return HookResult.Continue;
@@ -113,13 +114,11 @@ private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     // 如果是指令開頭(如 !r, !ak, /r)，跳過不處理，放行給系統和其他插件
     if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
 
-    // 讓 [所有人] 前綴保持乾淨的白字（你可以根據喜好改成別的顏色）
+    // 讓 [所有人] 前綴保持乾淨的白字
     string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
 
-    // [完美修正版] 
-    // ChatColors.Default 在玩家名字前，能讓 CS2 引擎自動套用該玩家的隊伍原色
-    // 名字印完後馬上用 ChatColors.White 把後面的冒號和聊天內文切回白色
-    Server.PrintToChatAll($"{senderPrefix} {ChatColors.Default}{playerName}{ChatColors.White}：{message}");
+    // ChatColors.TeamColor 才是真正觸發 CS2 原生隊伍染色的關鍵字！
+    Server.PrintToChatAll($"{senderPrefix} {ChatColors.TeamColor}{playerName}{ChatColors.White}：{message}");
 
     // 阻斷原本的聊天訊息，避免畫面上出現兩次
     return HookResult.Handled;
