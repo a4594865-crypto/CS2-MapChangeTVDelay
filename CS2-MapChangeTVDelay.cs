@@ -27,7 +27,7 @@ public class OneVOneReset : BasePlugin
     {
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
 
-        // 監聽訊息，但不再使用 Handled 阻斷
+        // 監聽訊息，改為 Continue 以確保不卡住其他核心插件 (如 MatchZy)
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
 
@@ -42,12 +42,15 @@ public class OneVOneReset : BasePlugin
 
             var player = @event.Userid;
             if (!player.IsValid || player.IsBot) return HookResult.Continue;
+
             if (player.TeamNum <= 1) return HookResult.Continue;
 
             string cachedPlayerName = player.PlayerName;
             ulong cachedSteamId = player.SteamID;
 
             if (cachedSteamId > 0) _disconnectingPlayers.Add(cachedSteamId);
+
+            Console.WriteLine($"[1V1 Log] 偵測到比賽中玩家 {cachedPlayerName} ({cachedSteamId}) 正在中斷連線...");
 
             AddTimer(1.5f, () => {
                 if (_isServerShuttingDown) return;
@@ -79,13 +82,12 @@ public class OneVOneReset : BasePlugin
                     int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
                     if (activeCount < 2)
                     {
-                        Server.PrintToChatAll($"{_prefix}玩家 \x10{cachedName}\x01 切換到觀戰，比賽已中止");
+                        Server.PrintToChatAll($"{_prefix}玩 家 \x10{cachedName}\x01 切 換 到 \x10 觀 戰 \x01 比 賽 已 中 止");
+                        Console.WriteLine($"[1V1 Log] 玩家 {cachedName} 切換到觀戰，比賽已中止");
                         
                         AddTimer(3.0f, () => {
-                            // 增加遊戲狀態檢查，避免換圖過程中發送訊息
-                            var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
-                            if (gameRules != null && !gameRules.WarmupPeriod && !_isMatchEnded && !_isServerShuttingDown)
-                                Server.PrintToChatAll($"{_prefix}請下一組玩家輸入 \x10 !R \x01 重新對戰開始");
+                            if (!_isMatchEnded && !_isServerShuttingDown)
+                                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
                         });
                     }
                 });
@@ -97,17 +99,15 @@ public class OneVOneReset : BasePlugin
     private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return HookResult.Continue;
+
         string message = info.GetArg(1).Trim(); 
-        if (string.IsNullOrWhiteSpace(message) || message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
+        if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
 
-        string playerName = player.PlayerName;
-        string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
-        string nameColor = (player.TeamNum == 1) ? $"{ChatColors.Grey}" : (player.TeamNum == 2 ? "\x10" : "\x0B");
+        // 僅紀錄 Log 到黑視窗，不再強制執行 Server.PrintToChatAll，交由系統原生顯示
+        // 這樣觀戰者與比賽者都能正常看見對方訊息，且不會干擾 MatchZy 指令運作
+        string teamLabel = player.TeamNum == 1 ? "Spec" : (player.TeamNum == 2 ? "TS" : "CT");
+        Console.WriteLine($"[{teamLabel}]{player.PlayerName}：{message}");
 
-        // 僅發送顯示訊息，不攔截系統指令
-        Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
-
-        // 改為 Continue，讓 MatchZy 等核心插件也能處理訊息
         return HookResult.Continue; 
     }
 
@@ -120,21 +120,28 @@ public class OneVOneReset : BasePlugin
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return;
-        player.PrintToChat($" {ChatColors.Orange}可在聊天欄位輸入指令，以下是常用武器");
-        player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ] !dg, !usp, !gk | [ {ChatColors.Orange}狙擊{ChatColors.White} ] !ssg, !awp | [ {ChatColors.Green}步槍{ChatColors.White} ] !ak, !a1, !a4");
+        
+        player.PrintToChat($" {ChatColors.Orange}可 在 聊天 欄 位 輸 入 您 要 的 武器，以 下 是 常 用 武器");
+        player.PrintToChat($" -----------------------------------------------------------------");
+        player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙漠之鷹 ]     、 {ChatColors.Blue}!usp {ChatColors.White}[ USP-S ]     、 {ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]");
+        player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]     、 {ChatColors.Orange}!awp {ChatColors.White}[ 狙擊步槍 ]");
+        player.PrintToChat($" [ {ChatColors.Green}步槍{ChatColors.White} ] {ChatColors.Green}!ak {ChatColors.White}[ AK-47 ]     、 {ChatColors.Green}!a1 {ChatColors.White}[ M4-A1 ]     、 {ChatColors.Green}!a4 {ChatColors.White}[ M4-A4 ]");
     }
 
     private void HandlePlayerDisconnectMsg(string playerName)
     {
         if (IsInWarmup() || _isMatchEnded || _isServerShuttingDown) return;
+
         int activeCount = Utilities.GetPlayers().Count(p => p != null && p.IsValid && !p.IsBot && p.SteamID > 0 && (p.TeamNum == 2 || p.TeamNum == 3));
 
         if (activeCount == 1)
         {
-            Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 已跳出離線，比賽已中止");
+            Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01 比 賽 已 中 止");
+            Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線離場，比賽已中止");
+            
             if (!_isMatchEnded && !_isServerShuttingDown)
             {
-                Server.PrintToChatAll($"{_prefix}請下一組玩家輸入 \x10 !R \x01 重新對戰開始");
+                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
             }
         }
     }
