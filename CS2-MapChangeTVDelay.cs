@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 訊息提示與 Log 監控";
-    public override string ModuleVersion => "2.7.2"; 
+    public override string ModuleVersion => "2.7.3"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isMatchEnded = false;
@@ -41,6 +41,21 @@ public class OneVOneReset : BasePlugin
 
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
+
+        // 🎯 [核心修正 1] 註冊地圖啟動事件，確保換到下一張新圖時，開關一定會重置回可比賽狀態
+        RegisterListener<Listeners.OnMapStart>(mapName => {
+            _isMatchEnded = false;
+            _isServerShuttingDown = false;
+            _disconnectingPlayers.Clear();
+            Console.WriteLine($"[1v1 Reset] 新地圖 {mapName} 已載入，重置比賽狀態開關。");
+        });
+
+        // 🎯 [核心修正 2] 註冊中場休息換圖事件（已移除不需要的 Console 訊息）
+        // 當黑視窗出現 "Going to intermission..." 的那一瞬間，立刻將開關鎖死，全面封鎖 !r 復活
+        RegisterEventHandler<EventCsIntermission>((@event, info) => {
+            _isMatchEnded = true;
+            return HookResult.Continue;
+        });
 
         RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
             _isMatchEnded = true;
@@ -166,39 +181,38 @@ public class OneVOneReset : BasePlugin
     }
 
     private void HandlePlayerDisconnectMsg(string playerName)
-{
-    // 如果在熱身、比賽已結束或伺服器正在關閉，則不處理
-    if (IsInWarmup() || _isMatchEnded || _isServerShuttingDown) return;
-
-    try
     {
-        // 統計場上 T 或 CT 隊的「真人」人數
-        int activeCount = Utilities.GetPlayers().Count(p => 
-            p != null && 
-            p.IsValid && 
-            !p.IsBot && 
-            p.SteamID > 0 && 
-            (p.TeamNum == 2 || p.TeamNum == 3)
-        );
+        // 如果在熱身、比賽已結束或伺服器正在關閉，則不處理
+        if (IsInWarmup() || _isMatchEnded || _isServerShuttingDown) return;
 
-        // 💡 關鍵修改：將 == 1 改為 < 2
-        // 這代表：只要人數少於 2 人，比賽就無法維持 1V1，必須中止
-        if (activeCount < 2)
+        try
         {
-            Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 已 離 線，比 賽 已 中 止");
-            Console.WriteLine($"玩家 {playerName} 斷線離場，比賽已中止");
-            
-            // 再次確認狀態才發送提示，防止洗版
-            if (!_isMatchEnded && !_isServerShuttingDown)
+            // 統計場上 T 或 CT 隊的「真人」人數
+            int activeCount = Utilities.GetPlayers().Count(p => 
+                p != null && 
+                p.IsValid && 
+                !p.IsBot && 
+                p.SteamID > 0 && 
+                (p.TeamNum == 2 || p.TeamNum == 3)
+            );
+
+            // 這代表：只要人數少於 2 人，比賽就無法維持 1V1，必須中止
+            if (activeCount < 2)
             {
-                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
+                Server.PrintToChatAll($"{_prefix}玩家 \x10{playerName}\x01 已 離 線，比 賽 已 中 止");
+                Console.WriteLine($"玩家 {playerName} 斷 線 離 場，比 賽 已 中 止");
+                
+                // 再次確認狀態才發送提示，防止洗版
+                if (!_isMatchEnded && !_isServerShuttingDown)
+                {
+                    Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
+                }
             }
         }
+        catch (Exception ex)
+        {
+            // 記錄錯誤以便除錯，但不要讓伺服器崩潰
+            Console.WriteLine($"[Error] HandlePlayerDisconnectMsg: {ex.Message}");
+        }
     }
-    catch (Exception ex)
-    {
-        // 記錄錯誤以便除錯，但不要讓伺服器崩潰
-        Console.WriteLine($"[Error] HandlePlayerDisconnectMsg: {ex.Message}");
-    }
-}
 }
