@@ -122,11 +122,11 @@ public class OneVOneReset : BasePlugin
         else if (player.TeamNum == 3) nameColor = $"\x0B";
 
         // 1. 遊戲內廣播
-        Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
+        Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName} {ChatColors.White}：{message}");
 
         // 2. 💡 關鍵補強：手動將訊息寫入黑視窗 (Console)
         // 為了讓黑視窗顯示訊息，我們必須主動印出來，並區分隊伍以利管理
-        string teamLabel = player.TeamNum == 1 ? "Spec" : (player.TeamNum == 2 ? "Terrorists" : "CT");
+        string teamLabel = player.TeamNum == 1 ? "Spec" : (player.TeamNum == 2 ? "C" : "CT");
         Console.WriteLine($"[{teamLabel}] {playerName}：{message}");
 
         // 3. 阻斷原生訊息 (避免重複顯示)
