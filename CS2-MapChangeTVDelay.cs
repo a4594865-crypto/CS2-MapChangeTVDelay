@@ -100,6 +100,7 @@ public class OneVOneReset : BasePlugin
 
     // 處理打字指令的專用方法
 // 處理打字指令的專用方法
+// 處理打字指令的專用方法
 private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
 {
     if (player == null || !player.IsValid) return HookResult.Continue;
@@ -138,6 +139,10 @@ private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
 
     // 強制全體廣播：[所有人] 名字(強制色彩) : 訊息(白字)
     Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
+
+    // 💡 關鍵修改：在這裡加上這三行，手動把打字訊息補印到伺服器的黑視窗中 (Console)
+    string teamLabel = player.TeamNum == 1 ? "Spec" : (player.TeamNum == 2 ? "Terrorists" : "CT");
+    Console.WriteLine($"[{teamLabel}] {playerName}: {message}");
 
     // 阻斷原本的聊天訊息，避免畫面上出現兩次
     return HookResult.Handled;
