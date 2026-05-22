@@ -142,7 +142,7 @@ public class OneVOneReset : BasePlugin
         // 如果發言者是觀戰者，手動把他的聊天內容強行輸入至伺服器黑視窗 (Console Log)
         if (player.TeamNum == 1)
         {
-            Console.WriteLine($"[觀 戰]{playerName}：{message}");
+            Console.WriteLine($"[觀戰] {playerName}: {message}");
         }
 
         // 阻斷原本的聊天訊息，避免畫面上出現兩次
