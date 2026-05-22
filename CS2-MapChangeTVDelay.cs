@@ -10,19 +10,20 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 訊息提示與 Log 監控";
-    public override string ModuleVersion => "2.7.2"; // 修正錯字與熱身判定 Bug
+    public override string ModuleVersion => "2.7.2"; 
 
     private readonly string _prefix = " [\x04 1 v 1 對 戰 模 式 \x01] ";
     private bool _isMatchEnded = false;
     private bool _isServerShuttingDown = false; 
     private readonly System.Collections.Generic.HashSet<ulong> _disconnectingPlayers = new();
 
-    // 💡 優化：使用標準官方安全屬性檢查熱身賽，避免底層實體抓取失敗
+    // 💡 修正：使用 CounterStrikeSharp 正確的官方 API「Utilities.GetGameRules()」來檢查熱身賽
     private bool IsInWarmup()
     {
         try
         {
-            return Server.GameRules == null || Server.GameRules.WarmupPeriod;
+            var gameRules = Utilities.GetGameRules();
+            return gameRules == null || gameRules.WarmupPeriod;
         }
         catch
         {
@@ -175,7 +176,6 @@ public class OneVOneReset : BasePlugin
 
             if (activeCount == 1)
             {
-                // 💡 修正：將這裡的 "玩 gia" 修正回 "玩家"
                 Server.PrintToChatAll($"{_prefix}玩 家 \x10{playerName}\x01 已 跳 出 \x10 離 線 \x01 比 賽 已 中 止");
                 Console.WriteLine($"[1V1 Log] 玩家 {playerName} 斷線離場，比賽已中止");
                 
