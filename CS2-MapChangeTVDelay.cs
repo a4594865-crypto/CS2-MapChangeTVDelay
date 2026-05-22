@@ -172,7 +172,7 @@ private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
             
             if (!_isMatchEnded && !_isServerShuttingDown)
             {
-                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
+                Server.PrintToChatAll($"{_prefix}請 下 一 組 玩 家 輸 入 \x10 !R \x01 重 新 對 戰 開 始");
             }
         }
     }
