@@ -100,48 +100,38 @@ public class OneVOneReset : BasePlugin
 
     // 處理打字指令的專用方法
 // 處理打字指令的專用方法
-private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
-{
-    if (player == null || !player.IsValid) return HookResult.Continue;
-
-    // 抓取字串最乾淨、最省效能且最安全
-    string message = info.GetArg(1).Trim(); 
-    string playerName = player.PlayerName;
-
-    if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
-
-    // 如果是指令開頭(如 !r, !ak, /r)，跳過不處理，放行給系統和其他插件
-    if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
-
-    // 讓 [所有人] 前綴保持乾淨的白字
-    string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
-    
-    // 預設名字顏色為白色
-    string nameColor = $"{ChatColors.White}";
-
-    // 分成三個隊伍手動強制給顏色：
-    // 1 = 觀戰者 (Spectator) -> 修正為原生灰色
-    // 2 = T (Terrorist)       -> 橘紅色
-    // 3 = CT (Counter-Terrorist) -> 亮藍色
-    if (player.TeamNum == 1)
+// 處理打字指令的專用方法
+    private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     {
-        nameColor = $"{ChatColors.Grey}"; // 觀戰灰
-    }
-    else if (player.TeamNum == 2)
-    {
-        nameColor = $"\x10"; // T 橘紅
-    }
-    else if (player.TeamNum == 3)
-    {
-        nameColor = $"\x0B"; // 正宗 CT 亮藍
-    }
+        if (player == null || !player.IsValid) return HookResult.Continue;
 
-    // 強制全體廣播：[所有人] 名字(強制色彩) : 訊息(白字)
-    Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
+        string message = info.GetArg(1).Trim(); 
+        string playerName = player.PlayerName;
 
-    // 阻斷原本的聊天訊息，避免畫面上出現兩次
-    return HookResult.Handled;
-}
+        if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
+
+        // 如果是指令開頭(如 !r, !ak, /r)，跳過不處理
+        if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
+
+        string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
+        string nameColor = $"{ChatColors.White}";
+
+        // 設定隊伍顏色
+        if (player.TeamNum == 1) nameColor = $"{ChatColors.Grey}";
+        else if (player.TeamNum == 2) nameColor = $"\x10";
+        else if (player.TeamNum == 3) nameColor = $"\x0B";
+
+        // 1. 遊戲內廣播
+        Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
+
+        // 2. 💡 關鍵補強：手動將訊息寫入黑視窗 (Console)
+        // 為了讓黑視窗顯示訊息，我們必須主動印出來，並區分隊伍以利管理
+        string teamLabel = player.TeamNum == 1 ? "Spec" : (player.TeamNum == 2 ? "Terrorists" : "CT");
+        Console.WriteLine($"[{teamLabel}] {playerName}：{message}");
+
+        // 3. 阻斷原生訊息 (避免重複顯示)
+        return HookResult.Handled;
+    }
     public override void Unload(bool hotReload)
     {
         _isServerShuttingDown = true;
