@@ -113,7 +113,7 @@ public class OneVOneReset : BasePlugin
         if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
 
         // 讓 [所有人] 前綴保持乾淨的白字
-        string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
+        string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White} ";
         
         // 預設名字顏色為白色
         string nameColor = $"{ChatColors.White}";
@@ -142,7 +142,7 @@ public class OneVOneReset : BasePlugin
         // 如果發言者是觀戰者，手動把他的聊天內容強行輸入至伺服器黑視窗 (Console Log)
         if (player.TeamNum == 1)
         {
-            Console.WriteLine($"[觀戰] {playerName}: {message}");
+            Console.WriteLine($"[觀戰]{playerName}: {message}");
         }
 
         // 阻斷原本的聊天訊息，避免畫面上出現兩次
