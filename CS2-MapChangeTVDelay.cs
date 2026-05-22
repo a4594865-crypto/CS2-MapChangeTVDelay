@@ -126,7 +126,7 @@ public class OneVOneReset : BasePlugin
 
         // 2. 💡 關鍵補強：手動將訊息寫入黑視窗 (Console)
         // 為了讓黑視窗顯示訊息，我們必須主動印出來，並區分隊伍以利管理
-        string teamLabel = player.TeamNum == 1 ? "Spec" : (player.TeamNum == 2 ? "C" : "CT");
+        string teamLabel = player.TeamNum == 1 ? "Spec" : (player.TeamNum == 2 ? "TS" : "CT");
         Console.WriteLine($"[{teamLabel}] {playerName}：{message}");
 
         // 3. 阻斷原生訊息 (避免重複顯示)
