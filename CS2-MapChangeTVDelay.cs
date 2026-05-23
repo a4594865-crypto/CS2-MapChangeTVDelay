@@ -69,9 +69,9 @@ public class OneVOneReset : BasePlugin
         
         player.PrintToChat($" {ChatColors.Orange}可 在 聊 天 欄 位 輸 入 您 要 的 武 器，以 下 是 常 用 武 器");
         player.PrintToChat($" --------------------------------------------------------------------");
-        player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙鷹 ]、{ChatColors.Blue}!usp {ChatColors.White}[ USP ]、{ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ]、{ChatColors.Blue}!r8 {ChatColors.White}[ R8 ]");
-        player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ]、 {ChatColors.Orange}!awp {ChatColors.White}[ AWP狙擊步槍 ]");
-        player.PrintToChat($" [ {ChatColors.Green}步槍{ChatColors.White} ] {ChatColors.Green}!ak {ChatColors.White}[ AK47 ]、 {ChatColors.Green}!a1 {ChatColors.White}[ M4A1 ]、 {ChatColors.Green}!a4 {ChatColors.White}[ M4A4 ]");
+        player.PrintToChat($" [ {ChatColors.Blue}手槍{ChatColors.White} ]  {ChatColors.Blue}!dg {ChatColors.White}[ 沙鷹 ] 、{ChatColors.Blue}!usp {ChatColors.White}[ USP ] 、{ChatColors.Blue}!gk {ChatColors.White}[ 格洛克 ] 、{ChatColors.Blue}!r8 {ChatColors.White}[ R8 ]");
+        player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ] 、 {ChatColors.Orange}!awp {ChatColors.White}[ AWP狙擊步槍 ]");
+        player.PrintToChat($" [ {ChatColors.Green}步槍{ChatColors.White} ] {ChatColors.Green}!ak {ChatColors.White}[ AK47 ] 、 {ChatColors.Green}!a1 {ChatColors.White}[ M4A1 ] 、 {ChatColors.Green}!a4 {ChatColors.White}[ M4A4 ]");
     }
 
     public override void Unload(bool hotReload)
