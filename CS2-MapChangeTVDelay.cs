@@ -48,15 +48,10 @@ public class OneVOneReset : BasePlugin
         string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
         string nameColor = $"{ChatColors.White}";
 
-        // 🎯 完美換成官方原生隊伍顏色邏輯：
-        if (player.TeamNum == 1) 
-        {
-            nameColor = $"{ChatColors.Default}"; // 觀戰：使用官方預設的灰白色名字
-        }
-        else if (player.TeamNum == 2 || player.TeamNum == 3) 
-        {
-            nameColor = $"{ChatColors.Team}";    // 警匪：使用官方原生隊伍色（警察亮藍、匪徒黃橘）
-        }
+        // 根據隊伍設定名字顏色
+        if (player.TeamNum == 1) nameColor = $"{ChatColors.Grey}";       // 觀戰
+        else if (player.TeamNum == 2) nameColor = $"\x10";               // T隊
+        else if (player.TeamNum == 3) nameColor = $"\x0B";               // CT隊
 
         // 全服廣播聊天訊息
         Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
