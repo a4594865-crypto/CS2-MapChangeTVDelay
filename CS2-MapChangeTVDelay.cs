@@ -55,7 +55,7 @@ public class OneVOneReset : BasePlugin
         }
         else if (player.TeamNum == 3) // CT 隊
         {
-            nameColor = ChatColors.Blue;
+            nameColor = ChatColors.TeamColor;
         }
         else if (player.TeamNum == 1) // 觀察者 Spec
         {
