@@ -11,7 +11,6 @@ public class OneVOneReset : BasePlugin
     public override string ModuleName => "1V1 武器提示與聊天顯示";
     public override string ModuleVersion => "1.2.0"; 
 
-    // 用你當初最讚的想法：當地圖要關閉/換圖時，用這個開關把聊天功能徹底灌昏
     private bool _isServerShuttingDown = false; 
 
     public override void Load(bool hotReload)
@@ -25,7 +24,7 @@ public class OneVOneReset : BasePlugin
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
 
-        // 🎯 註冊官方換圖/關圖事件：一旦換圖，立刻啟動保護傘
+        //註冊官方換圖/關圖事件：保護傘
         RegisterEventHandler<EventMapShutdown>((@event, info) => {
             _isServerShuttingDown = true;
             return HookResult.Continue;
@@ -34,7 +33,7 @@ public class OneVOneReset : BasePlugin
 
     private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     {
-        // 🛡️ 如果伺服器正在換圖/卸載，直接跳出，絕不干擾官方換圖流程
+        // 如果伺服器正在換圖/卸載，不干擾官方換圖流程
         if (_isServerShuttingDown || player == null || !player.IsValid) return HookResult.Continue;
 
         string message = info.GetArg(1).Trim(); 
@@ -42,7 +41,7 @@ public class OneVOneReset : BasePlugin
 
         if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
 
-        // 如果是指令（! 或 / 開頭），交給官方或其他插件處理
+        // 如果是（! 或 / 開頭），給他插件處理
         if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
 
         string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
@@ -56,7 +55,7 @@ public class OneVOneReset : BasePlugin
         // 全服廣播聊天訊息
         Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
 
-        // 同步印到伺服器黑視窗（Console）
+        // 同步印到伺服器黑視窗
         string teamLabel = player.TeamNum == 1 ? "Spec" : (player.TeamNum == 2 ? "TS" : "CT");
         Console.WriteLine($"[{teamLabel}]{playerName}：{message}");
 
