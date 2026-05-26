@@ -52,7 +52,7 @@ public class OneVOneReset : BasePlugin
             if (_isServerShuttingDown) return;
             if (IsInWarmup()) return;
 
-            // 🎯 核心改動：直接上網撈地圖上的隊伍實體 (CCSTeam)
+            // 核心改動：直接上網撈地圖上的隊伍實體 (CCSTeam)
             var teams = Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager");
             if (teams != null)
             {
@@ -87,9 +87,8 @@ public class OneVOneReset : BasePlugin
             {
                 Server.ExecuteCommand("mp_warmup_start");
                 Server.ExecuteCommand("mp_warmup_pausetimer 1");
-                Server.ExecuteCommand("mp_restartgame 1");
                 
-                Console.WriteLine($"[1V1重置 Log] 偵測到比賽中途離場，已強制重置凍結暖身。");
+                Console.WriteLine($"[1V1重置] 比賽中途離場，重置凍結暖身。");
             }
         });
     }
