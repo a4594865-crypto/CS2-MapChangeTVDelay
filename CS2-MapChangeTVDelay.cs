@@ -70,7 +70,7 @@ public class OneVOneReset : BasePlugin
                 // 3. 執行工作坊地圖重置，清空所有髒數據
                 Server.ExecuteCommand("mp_restartgame 1");
                 
-                Console.WriteLine($"[1V1重置 Log] 比賽中途離場，已重置並【凍結】暖身時間秒數。");
+                Console.WriteLine($"[1V1重置 Log] 比賽中途離場，已重置暖身");
             }
         });
     }
