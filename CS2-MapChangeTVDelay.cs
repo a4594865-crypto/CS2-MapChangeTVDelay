@@ -87,7 +87,6 @@ public class OneVOneReset : BasePlugin
             {
                 Server.ExecuteCommand("mp_warmup_start");
                 Server.ExecuteCommand("mp_warmup_pausetimer 1");
-                Server.ExecuteCommand("mp_restartgame 1");
                 
                 Console.WriteLine($"[1V1重置 Log] 已強制清理數據並重置凍結暖身。");
             }
