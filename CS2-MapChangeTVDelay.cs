@@ -13,7 +13,7 @@ public class OneVOneReset : BasePlugin
     public override string ModuleVersion => "2.2.6"; // 更新版本號至 2.2.6
 
     private bool _isServerShuttingDown = false; 
-    private bool _isResetting = false; // 🎯 新增防重複鎖：防止計時器同時間重複重置
+    private bool _isResetting = false; // 新增防重複鎖：防止計時器同時間重複重置
 
     private bool IsInWarmup()
     {
@@ -49,7 +49,7 @@ public class OneVOneReset : BasePlugin
 
     private void CheckAndResetGame()
     {
-        // 🎯 如果已經有重置程序在倒數排隊中，直接跳出，拒絕重複產生計時器
+        // 如果已經有重置程序在倒數排隊中，直接跳出，拒絕重複產生計時器
         if (_isResetting) return;
 
         // 鎖上開關
