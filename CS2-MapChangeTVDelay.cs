@@ -10,14 +10,14 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "1.9.6"; // 升級版本號
+    public override string ModuleVersion => "2.0.0"; // 修正編譯，大版本號升級
 
     private bool _isServerShuttingDown = false; 
 
     private bool IsInWarmup()
     {
-        var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
-        return gameRules == null || gameRules.WarmupPeriod;
+        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+        return gameRulesProxy?.GameRules?.WarmupPeriod ?? true;
     }
 
     public override void Load(bool hotReload)
@@ -60,31 +60,29 @@ public class OneVOneReset : BasePlugin
 
     private void HandleTimeoutHealthCheck()
     {
-        // 抓出當前在 T 隊和 CT 隊的活著玩家
         var ctPlayer = Utilities.GetPlayers().FirstOrDefault(p => p != null && p.IsValid && !p.IsBot && p.TeamNum == 3 && p.PawnIsAlive);
         var tPlayer = Utilities.GetPlayers().FirstOrDefault(p => p != null && p.IsValid && !p.IsBot && p.TeamNum == 2 && p.PawnIsAlive);
 
         if (ctPlayer == null || tPlayer == null) return;
 
-        // 讀取兩人的血量
         int ctHealth = ctPlayer.PlayerPawn.Value?.Health ?? 0;
         int tHealth = tPlayer.PlayerPawn.Value?.Health ?? 0;
 
-        var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
-        if (gameRules == null) return;
+        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+        var gameRules = gameRulesProxy?.GameRules;
+        if (gameRules == null || gameRulesProxy == null) return;
 
-        // 比較血量邏輯（純分數處理，不發送任何聊天訊息）
         if (ctHealth > tHealth)
         {
             // CT 血多：保持原生結算
         }
         else if (tHealth > ctHealth)
         {
-            // T 血多：強制幫 T 隊加 1 分修正公平性
-            gameRules.TScore += 1; 
+            // T 血多：手動把 T 隊的分數加 1 (陣列索引 2 代表 T隊)
+            gameRules.MatchStats_RoundsTotal[2] += 1;
             
-            // 強制更新客戶端計分板顯示
-            Utilities.SetStateChanged(gameRules, "CCSGameRules", "m_iMatchStats_RoundsTotal"); 
+            // 💡 修正：傳入 gameRulesProxy (它是 CBaseEntity)，資訊才會正確同步到客戶端
+            Utilities.SetStateChanged(gameRulesProxy, "CCSGameRulesProxy", "m_pGameRules"); 
         }
     }
 
@@ -94,13 +92,14 @@ public class OneVOneReset : BasePlugin
             if (_isServerShuttingDown) return;
             if (IsInWarmup()) return;
 
-            var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+            var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+            var gameRules = gameRulesProxy?.GameRules;
             if (gameRules != null)
             {
-                int ctScore = gameRules.CTScore;
-                int tScore = gameRules.TScore;
+                // 💡 修正：從正確的 MatchStats 陣列中抓取兩隊得分 (索引 2 是 T，索引 3 是 CT)
+                int tScore = gameRules.MatchStats_RoundsTotal[2];
+                int ctScore = gameRules.MatchStats_RoundsTotal[3];
 
-                // 💡 已移除 Console.WriteLine，改為直接跳出
                 if (ctScore >= 30 || tScore >= 30)
                 {
                     return; 
@@ -119,7 +118,6 @@ public class OneVOneReset : BasePlugin
             {
                 Server.ExecuteCommand("mp_warmup_start");
                 Server.ExecuteCommand("mp_warmup_pausetimer 1");
-                Server.ExecuteCommand("mp_restartgame 1");
                 
                 Console.WriteLine($"[1V1重置 Log] 比賽中途離場，重置凍結暖身。");
             }
