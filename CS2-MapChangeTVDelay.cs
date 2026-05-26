@@ -10,10 +10,9 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "1.5.0"; // 升級版本號
+    public override string ModuleVersion => "1.9.6"; // 升級版本號
 
     private bool _isServerShuttingDown = false; 
-    private bool _isMatchEnded = false; // 💡 核心新增：用來標記比賽是否已經正常打完結束
 
     private bool IsInWarmup()
     {
@@ -24,25 +23,22 @@ public class OneVOneReset : BasePlugin
     public override void Load(bool hotReload)
     {
         _isServerShuttingDown = false;
-        _isMatchEnded = false; // 初始化狀態
 
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
 
-        // 💡 關鍵監聽：當比賽「正常打完」並跳出最終計分板時觸發
-        RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
-            _isMatchEnded = true; // 鎖定狀態：這是正常結束，接下來有人離開都不准重置
-            return HookResult.Continue;
-        });
+        // 監聽單局結束：判斷「時間到誰血多就贏」
+        RegisterEventHandler<EventRoundEnd>((@event, info) => {
+            if (_isServerShuttingDown || IsInWarmup()) return HookResult.Continue;
 
-        // 💡 關鍵監聽：當新的一局、或地圖重新開始（包括暖身）時，重置這個狀態鎖
-        RegisterEventHandler<EventRoundStart>((@event, info) => {
-            // 如果目前是暖身，或者新對局開始，代表舊的比賽已經過去了，解鎖狀態
-            if (IsInWarmup())
+            // Reason 13 = TargetSaved (時間到，CT 守住)
+            // Reason 9 = RoundDraw (平局/超時)
+            if (@event.Reason == 13 || @event.Reason == 9)
             {
-                _isMatchEnded = false;
+                HandleTimeoutHealthCheck();
             }
+
             return HookResult.Continue;
         });
 
@@ -62,18 +58,55 @@ public class OneVOneReset : BasePlugin
         });
     }
 
+    private void HandleTimeoutHealthCheck()
+    {
+        // 抓出當前在 T 隊和 CT 隊的活著玩家
+        var ctPlayer = Utilities.GetPlayers().FirstOrDefault(p => p != null && p.IsValid && !p.IsBot && p.TeamNum == 3 && p.PawnIsAlive);
+        var tPlayer = Utilities.GetPlayers().FirstOrDefault(p => p != null && p.IsValid && !p.IsBot && p.TeamNum == 2 && p.PawnIsAlive);
+
+        if (ctPlayer == null || tPlayer == null) return;
+
+        // 讀取兩人的血量
+        int ctHealth = ctPlayer.PlayerPawn.Value?.Health ?? 0;
+        int tHealth = tPlayer.PlayerPawn.Value?.Health ?? 0;
+
+        var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+        if (gameRules == null) return;
+
+        // 比較血量邏輯（純分數處理，不發送任何聊天訊息）
+        if (ctHealth > tHealth)
+        {
+            // CT 血多：保持原生結算
+        }
+        else if (tHealth > ctHealth)
+        {
+            // T 血多：強制幫 T 隊加 1 分修正公平性
+            gameRules.TScore += 1; 
+            
+            // 強制更新客戶端計分板顯示
+            Utilities.SetStateChanged(gameRules, "CCSGameRules", "m_iMatchStats_RoundsTotal"); 
+        }
+    }
+
     private void CheckAndResetGame()
     {
         AddTimer(1.0f, () => {
             if (_isServerShuttingDown) return;
-
-            // 如果目前已經在熱身，甚麼都不做
             if (IsInWarmup()) return;
 
-            // 💡 核心修正：如果這場比賽已經「正常打完結束了」，玩家離開是正常的，直接跳出，絕不干擾官方結算流程！
-            if (_isMatchEnded) return;
+            var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+            if (gameRules != null)
+            {
+                int ctScore = gameRules.CTScore;
+                int tScore = gameRules.TScore;
 
-            // 精準統計目前在「T隊(2)」與「CT隊(3)」的真實對戰玩家人數
+                // 💡 已移除 Console.WriteLine，改為直接跳出
+                if (ctScore >= 30 || tScore >= 30)
+                {
+                    return; 
+                }
+            }
+
             int activePlayers = Utilities.GetPlayers().Count(p => 
                 p != null && 
                 p.IsValid && 
@@ -82,13 +115,12 @@ public class OneVOneReset : BasePlugin
                 (p.TeamNum == 2 || p.TeamNum == 3)
             );
 
-            // 只有在「正式比賽中」且「未打完」的情況下，人數少於 2 人才判定為中途惡意離場
             if (activePlayers < 2)
             {
                 Server.ExecuteCommand("mp_warmup_start");
                 Server.ExecuteCommand("mp_warmup_pausetimer 1");
                 
-                Console.WriteLine($"[1V1重置 Log] 已強制清理數據並重置凍結暖身。");
+                Console.WriteLine($"[1V1重置 Log] 比賽中途離場，已強制重置凍結暖身。");
             }
         });
     }
@@ -96,10 +128,8 @@ public class OneVOneReset : BasePlugin
     private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     {
         if (_isServerShuttingDown || player == null || !player.IsValid) return HookResult.Continue;
-
         string message = info.GetArg(1).Trim(); 
         string playerName = player.PlayerName;
-
         if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
         if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
 
@@ -111,17 +141,14 @@ public class OneVOneReset : BasePlugin
         else if (player.TeamNum == 3) nameColor = $"\x0B";               
 
         Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
-
         string teamLabel = player.TeamNum == 1 ? "Spec" : (player.TeamNum == 2 ? "TS" : "CT");
         Console.WriteLine($"[{teamLabel}]{playerName}：{message}");
-
         return HookResult.Handled;
     }
 
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return;
-        
         player.PrintToChat($" {ChatColors.Orange}您 可 在 聊 天 欄 位 輸 入 您 要 的 武器，以 下 是 常 用 武器");
         player.PrintToChat($" ----------------------------------------------------------------------");
         player.PrintToChat($" [ {ChatColors.LightBlue}手槍{ChatColors.White} ]  {ChatColors.LightBlue}!dg {ChatColors.White}[ 沙鷹 ] 、{ChatColors.LightBlue}!usp {ChatColors.White}[ USP ] 、{ChatColors.LightBlue}!gk {ChatColors.White}[ 格洛克 ] 、{ChatColors.LightBlue}!r8 {ChatColors.White}[ R8 ]");
