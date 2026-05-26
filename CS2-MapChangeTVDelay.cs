@@ -10,9 +10,10 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "1.4.0"; // 升級版本號
+    public override string ModuleVersion => "1.5.0"; // 升級版本號
 
     private bool _isServerShuttingDown = false; 
+    private bool _isMatchEnded = false; // 💡 核心新增：用來標記比賽是否已經正常打完結束
 
     private bool IsInWarmup()
     {
@@ -23,10 +24,27 @@ public class OneVOneReset : BasePlugin
     public override void Load(bool hotReload)
     {
         _isServerShuttingDown = false;
+        _isMatchEnded = false; // 初始化狀態
 
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
+
+        // 💡 關鍵監聽：當比賽「正常打完」並跳出最終計分板時觸發
+        RegisterEventHandler<EventCsWinPanelMatch>((@event, info) => {
+            _isMatchEnded = true; // 鎖定狀態：這是正常結束，接下來有人離開都不准重置
+            return HookResult.Continue;
+        });
+
+        // 💡 關鍵監聽：當新的一局、或地圖重新開始（包括暖身）時，重置這個狀態鎖
+        RegisterEventHandler<EventRoundStart>((@event, info) => {
+            // 如果目前是暖身，或者新對局開始，代表舊的比賽已經過去了，解鎖狀態
+            if (IsInWarmup())
+            {
+                _isMatchEnded = false;
+            }
+            return HookResult.Continue;
+        });
 
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
             CheckAndResetGame();
@@ -49,8 +67,13 @@ public class OneVOneReset : BasePlugin
         AddTimer(1.0f, () => {
             if (_isServerShuttingDown) return;
 
+            // 如果目前已經在熱身，甚麼都不做
             if (IsInWarmup()) return;
 
+            // 💡 核心修正：如果這場比賽已經「正常打完結束了」，玩家離開是正常的，直接跳出，絕不干擾官方結算流程！
+            if (_isMatchEnded) return;
+
+            // 精準統計目前在「T隊(2)」與「CT隊(3)」的真實對戰玩家人數
             int activePlayers = Utilities.GetPlayers().Count(p => 
                 p != null && 
                 p.IsValid && 
@@ -59,18 +82,14 @@ public class OneVOneReset : BasePlugin
                 (p.TeamNum == 2 || p.TeamNum == 3)
             );
 
+            // 只有在「正式比賽中」且「未打完」的情況下，人數少於 2 人才判定為中途惡意離場
             if (activePlayers < 2)
             {
-                // 1. 先強制開啟暖身
                 Server.ExecuteCommand("mp_warmup_start");
-                
-                // 2. 💡 核心修正：強制將暖身計時器「凍結/暫停」，讓秒數絕對不會跑！
                 Server.ExecuteCommand("mp_warmup_pausetimer 1");
-                
-                // 3. 執行工作坊地圖重置，清空所有髒數據
                 Server.ExecuteCommand("mp_restartgame 1");
                 
-                Console.WriteLine($"[1V1重置 Log] 比賽中途離場，已重置暖身");
+                Console.WriteLine($"[1V1重置 Log] 已強制清理數據並重置凍結暖身。");
             }
         });
     }
@@ -104,7 +123,7 @@ public class OneVOneReset : BasePlugin
     {
         if (player == null || !player.IsValid) return;
         
-        player.PrintToChat($" {ChatColors.Orange}您 可 在 聊 天 欄 位 輸 入 您 要 的 武 器，以 下 是 常 用 武 器");
+        player.PrintToChat($" {ChatColors.Orange}您 可 在 聊 天 欄 位 輸 入 您 要 的 武器，以 下 是 常 用 武器");
         player.PrintToChat($" ----------------------------------------------------------------------");
         player.PrintToChat($" [ {ChatColors.LightBlue}手槍{ChatColors.White} ]  {ChatColors.LightBlue}!dg {ChatColors.White}[ 沙鷹 ] 、{ChatColors.LightBlue}!usp {ChatColors.White}[ USP ] 、{ChatColors.LightBlue}!gk {ChatColors.White}[ 格洛克 ] 、{ChatColors.LightBlue}!r8 {ChatColors.White}[ R8 ]");
         player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ] 、{ChatColors.Orange}!awp {ChatColors.White}[ AWP狙擊步槍 ]");
