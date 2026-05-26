@@ -3,15 +3,23 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Commands;
 using System;
+using System.Linq; // 引入 LINQ 用於超輕量人數篩選
 
 namespace OneVOneReset;
 
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "1.2.0"; 
+    public override string ModuleVersion => "1.3.5"; // 更新版本號
 
     private bool _isServerShuttingDown = false; 
+
+    // 💡 檢查當前伺服器是否處於熱身階段
+    private bool IsInWarmup()
+    {
+        var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+        return gameRules == null || gameRules.WarmupPeriod;
+    }
 
     public override void Load(bool hotReload)
     {
@@ -24,16 +32,58 @@ public class OneVOneReset : BasePlugin
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
 
-        //註冊官方換圖/關圖事件：保護傘
+        // 監聽玩家斷線與換隊事件
+        RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
+            CheckAndResetGame();
+            return HookResult.Continue;
+        });
+
+        RegisterEventHandler<EventPlayerTeam>((@event, info) => {
+            CheckAndResetGame();
+            return HookResult.Continue;
+        });
+
+        // 註冊官方換圖/關圖事件：保護傘
         RegisterEventHandler<EventMapShutdown>((@event, info) => {
             _isServerShuttingDown = true;
             return HookResult.Continue;
         });
     }
 
+    private void CheckAndResetGame()
+    {
+        // 延遲 1.0 秒執行，確保遊戲引擎已更新完玩家的陣存狀態
+        AddTimer(1.0f, () => {
+            if (_isServerShuttingDown) return;
+
+            // 💡 核心修正：如果當前已經是熱身階段(Warmup)，直接跳出，甚麼都不做！
+            if (IsInWarmup()) return;
+
+            // 精準統計目前在「T隊(2)」與「CT隊(3)」的真實玩家人數（排除Bot與觀戰）
+            int activePlayers = Utilities.GetPlayers().Count(p => 
+                p != null && 
+                p.IsValid && 
+                !p.IsBot && 
+                p.SteamID > 0 && 
+                (p.TeamNum == 2 || p.TeamNum == 3)
+            );
+
+            // 如果是在「正規比賽期間」且對戰人數少於 2 人
+            if (activePlayers < 2)
+            {
+                // 先開啟暖身狀態
+                Server.ExecuteCommand("mp_warmup_start");
+                
+                // 針對工作坊地圖雙重保險：強制重啟對局，清空殘留數據
+                Server.ExecuteCommand("mp_restartgame 1");
+                
+                Console.WriteLine($"[1V1重置 Log] 正式比賽中玩家中途離場（剩餘 {activePlayers} 人），已強制重置遊戲為暖身。");
+            }
+        });
+    }
+
     private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     {
-        // 如果伺服器正在換圖/卸載，不干擾官方換圖流程
         if (_isServerShuttingDown || player == null || !player.IsValid) return HookResult.Continue;
 
         string message = info.GetArg(1).Trim(); 
@@ -41,21 +91,17 @@ public class OneVOneReset : BasePlugin
 
         if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
 
-        // 如果是（! 或 / 開頭），給他插件處理
         if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
 
         string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
         string nameColor = $"{ChatColors.White}";
 
-        // 根據隊伍設定名字顏色
         if (player.TeamNum == 1) nameColor = $"{ChatColors.Grey}";       // 觀戰
         else if (player.TeamNum == 2) nameColor = $"\x10";               // T隊
         else if (player.TeamNum == 3) nameColor = $"\x0B";               // CT隊
 
-        // 全服廣播聊天訊息
         Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
 
-        // 同步印到伺服器黑視窗
         string teamLabel = player.TeamNum == 1 ? "Spec" : (player.TeamNum == 2 ? "TS" : "CT");
         Console.WriteLine($"[{teamLabel}]{playerName}：{message}");
 
