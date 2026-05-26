@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "2.1.0"; // 升級版本號
+    public override string ModuleVersion => "2.2.0"; // 升級版本號
 
     private bool _isServerShuttingDown = false; 
 
@@ -47,23 +47,29 @@ public class OneVOneReset : BasePlugin
 
     private void CheckAndResetGame()
     {
-        // 延遲 1.0 秒，確保離線狀態與分數同步完成
+        // 延遲 1.0 秒，確保引擎與離線狀態更新
         AddTimer(1.0f, () => {
             if (_isServerShuttingDown) return;
             if (IsInWarmup()) return;
 
-            // 🎯 讀取兩隊目前的 MatchStats 分數
-            var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
-            var gameRules = gameRulesProxy?.GameRules;
-            if (gameRules != null)
+            // 🎯 核心改動：直接上網撈地圖上的隊伍實體 (CCSTeam)
+            var teams = Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager");
+            if (teams != null)
             {
-                int tScore = gameRules.MatchStats_RoundsTotal[2];
-                int ctScore = gameRules.MatchStats_RoundsTotal[3];
+                // TeamNum 2 是 T 隊，TeamNum 3 是 CT 隊
+                var tTeam = teams.FirstOrDefault(t => t.TeamNum == 2);
+                var ctTeam = teams.FirstOrDefault(t => t.TeamNum == 3);
 
-                // 如果有人已經拿到 30 勝，代表比賽完美完結，直接跳出，絕不重置
-                if (ctScore >= 30 || tScore >= 30)
+                if (tTeam != null && ctTeam != null)
                 {
-                    return; 
+                    int tScore = tTeam.Score;
+                    int ctScore = ctTeam.Score;
+
+                    // 如果有人到了 30 勝，這是正常完賽，直接跳出不重置！
+                    if (ctScore >= 30 || tScore >= 30)
+                    {
+                        return; 
+                    }
                 }
             }
 
@@ -81,8 +87,9 @@ public class OneVOneReset : BasePlugin
             {
                 Server.ExecuteCommand("mp_warmup_start");
                 Server.ExecuteCommand("mp_warmup_pausetimer 1");
+                Server.ExecuteCommand("mp_restartgame 1");
                 
-                Console.WriteLine($"[1V1重置 Log] 比賽中途離場，重置凍結暖身。");
+                Console.WriteLine($"[1V1重置 Log] 偵測到比賽中途離場，已強制重置凍結暖身。");
             }
         });
     }
