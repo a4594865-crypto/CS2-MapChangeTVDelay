@@ -10,10 +10,9 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "2.2.6"; // 更新版本號至 2.2.6
+    public override string ModuleVersion => "2.2.5"; // 微調版本號
 
     private bool _isServerShuttingDown = false; 
-    private bool _isResetting = false; // 新增防重複鎖：防止計時器同時間重複重置
 
     private bool IsInWarmup()
     {
@@ -24,7 +23,6 @@ public class OneVOneReset : BasePlugin
     public override void Load(bool hotReload)
     {
         _isServerShuttingDown = false;
-        _isResetting = false; // 初始化開關
 
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
         AddCommandListener("say", OnPlayerSay);
@@ -49,17 +47,8 @@ public class OneVOneReset : BasePlugin
 
     private void CheckAndResetGame()
     {
-        // 如果已經有重置程序在倒數排隊中，直接跳出，拒絕重複產生計時器
-        if (_isResetting) return;
-
-        // 鎖上開關
-        _isResetting = true;
-
         // 延遲 1.0 秒，確保引擎與離線狀態更新
         AddTimer(1.0f, () => {
-            // 計時器開始執行，解開開關，讓未來的斷線事件可以重新觸發
-            _isResetting = false;
-
             if (_isServerShuttingDown) return;
             if (IsInWarmup()) return;
 
@@ -121,12 +110,14 @@ public class OneVOneReset : BasePlugin
 
         string formattedMessage = $"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}";
 
-        // 繞過官方 Server.PrintToChatAll 導致的黑視窗二次轉發副作用
+        // 這裡改成巡迴發送給每個人，繞過官方 Server.PrintToChatAll 導致的黑視窗二次轉發副作用！
         var allPlayers = Utilities.GetPlayers().Where(p => p != null && p.IsValid && !p.IsBot);
         foreach (var p in allPlayers)
         {
             p.PrintToChat(formattedMessage);
         }
+
+        // 這裡原本多餘的 Console.WriteLine 與 teamLabel 已被徹底拔除，不再吃硬碟與主機效能！
 
         return HookResult.Handled;
     }
