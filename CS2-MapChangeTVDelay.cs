@@ -88,7 +88,7 @@ public class OneVOneReset : BasePlugin
                 Server.ExecuteCommand("mp_warmup_start");
                 Server.ExecuteCommand("mp_warmup_pausetimer 1");
                 
-                Console.WriteLine($"[1V1重置] 比賽中途離場，重置凍結暖身。");
+                Console.WriteLine($"[1V1重置] 中途離場，重置暖身。");
             }
         });
     }
