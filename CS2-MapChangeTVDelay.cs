@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "2.2.1"; // 微調版本號
+    public override string ModuleVersion => "2.2.2"; // 更新版本號
 
     private bool _isServerShuttingDown = false; 
 
@@ -47,16 +47,13 @@ public class OneVOneReset : BasePlugin
 
     private void CheckAndResetGame()
     {
-        // 延遲 1.0 秒，確保引擎與離線狀態更新
         AddTimer(1.0f, () => {
             if (_isServerShuttingDown) return;
             if (IsInWarmup()) return;
 
-            // 核心改動：直接上網撈地圖上的隊伍實體 (CCSTeam)
             var teams = Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager");
             if (teams != null)
             {
-                // TeamNum 2 是 T 隊，TeamNum 3 是 CT 隊
                 var tTeam = teams.FirstOrDefault(t => t.TeamNum == 2);
                 var ctTeam = teams.FirstOrDefault(t => t.TeamNum == 3);
 
@@ -65,7 +62,6 @@ public class OneVOneReset : BasePlugin
                     int tScore = tTeam.Score;
                     int ctScore = ctTeam.Score;
 
-                    // 如果有人到了 30 勝，這是正常完賽，直接跳出不重置！
                     if (ctScore >= 30 || tScore >= 30)
                     {
                         return; 
@@ -73,7 +69,6 @@ public class OneVOneReset : BasePlugin
                 }
             }
 
-            // 統計目前在 T(2) 與 CT(3) 的真實對戰玩家人數
             int activePlayers = Utilities.GetPlayers().Count(p => 
                 p != null && 
                 p.IsValid && 
@@ -82,7 +77,6 @@ public class OneVOneReset : BasePlugin
                 (p.TeamNum == 2 || p.TeamNum == 3)
             );
 
-            // 正式比賽未完結且打球人數少於 2 人，判定為中途離場
             if (activePlayers < 2)
             {
                 Server.ExecuteCommand("mp_warmup_start");
@@ -108,10 +102,13 @@ public class OneVOneReset : BasePlugin
         else if (player.TeamNum == 2) nameColor = $"\x10";                
         else if (player.TeamNum == 3) nameColor = $"\x0B";                
 
-        // 僅保留發送到遊戲內聊天室的功能
-        Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
-        
-        // 轉發到黑視窗的 Console.WriteLine 與 teamLabel 已被徹底移除
+        string formattedMessage = $"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}";
+
+        var allPlayers = Utilities.GetPlayers().Where(p => p != null && p.IsValid && !p.IsBot);
+        foreach (var p in allPlayers)
+        {
+            p.PrintToChat(formattedMessage);
+        }
 
         return HookResult.Handled;
     }
