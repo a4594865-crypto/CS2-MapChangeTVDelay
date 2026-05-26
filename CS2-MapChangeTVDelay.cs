@@ -10,14 +10,14 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "1.8.0"; // 升級版本號
+    public override string ModuleVersion => "2.1.0"; // 升級版本號
 
     private bool _isServerShuttingDown = false; 
 
     private bool IsInWarmup()
     {
-        var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
-        return gameRules == null || gameRules.WarmupPeriod;
+        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+        return gameRulesProxy?.GameRules?.WarmupPeriod ?? true;
     }
 
     public override void Load(bool hotReload)
@@ -28,6 +28,7 @@ public class OneVOneReset : BasePlugin
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
 
+        // 監聽玩家斷線與換隊
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
             CheckAndResetGame();
             return HookResult.Continue;
@@ -46,26 +47,27 @@ public class OneVOneReset : BasePlugin
 
     private void CheckAndResetGame()
     {
-        // 延遲 1.0 秒，確保遊戲引擎數據與離線狀態同步更新
+        // 延遲 1.0 秒，確保離線狀態與分數同步完成
         AddTimer(1.0f, () => {
             if (_isServerShuttingDown) return;
             if (IsInWarmup()) return;
 
-            // 💡 針對「個人 30 勝」的精準核心判定
-            var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+            // 🎯 讀取兩隊目前的 MatchStats 分數
+            var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+            var gameRules = gameRulesProxy?.GameRules;
             if (gameRules != null)
             {
-                int ctScore = gameRules.CTScore;
-                int tScore = gameRules.TScore;
+                int tScore = gameRules.MatchStats_RoundsTotal[2];
+                int ctScore = gameRules.MatchStats_RoundsTotal[3];
 
-                // 🎯 只要有任何一方的分數『大於或等於 30 分』，代表比賽已經正常打完結束
+                // 如果有人已經拿到 30 勝，代表比賽完美完結，直接跳出，絕不重置
                 if (ctScore >= 30 || tScore >= 30)
                 {
-                    return; // 正常打完，直接跳出，把結算留給遊戲引擎
+                    return; 
                 }
             }
 
-            // 如果雙方都還沒拿到 30 勝，卻有人離開，才判定為「中途離場」
+            // 統計目前在 T(2) 與 CT(3) 的真實對戰玩家人數
             int activePlayers = Utilities.GetPlayers().Count(p => 
                 p != null && 
                 p.IsValid && 
@@ -74,12 +76,13 @@ public class OneVOneReset : BasePlugin
                 (p.TeamNum == 2 || p.TeamNum == 3)
             );
 
-            // 正式比賽中途離場（人數少於 2 人），強制清理殘留數據並回到凍結暖身
+            // 正式比賽未完結且打球人數少於 2 人，判定為中途離場
             if (activePlayers < 2)
             {
                 Server.ExecuteCommand("mp_warmup_start");
                 Server.ExecuteCommand("mp_warmup_pausetimer 1");
-
+                
+                Console.WriteLine($"[1V1重置 Log] 比賽中途離場，重置凍結暖身。");
             }
         });
     }
