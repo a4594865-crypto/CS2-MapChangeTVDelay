@@ -10,14 +10,14 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "2.0.0"; // 修正編譯，大版本號升級
+    public override string ModuleVersion => "1.8.0"; // 升級版本號
 
     private bool _isServerShuttingDown = false; 
 
     private bool IsInWarmup()
     {
-        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
-        return gameRulesProxy?.GameRules?.WarmupPeriod ?? true;
+        var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+        return gameRules == null || gameRules.WarmupPeriod;
     }
 
     public override void Load(bool hotReload)
@@ -27,20 +27,6 @@ public class OneVOneReset : BasePlugin
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
-
-        // 監聽單局結束：判斷「時間到誰血多就贏」
-        RegisterEventHandler<EventRoundEnd>((@event, info) => {
-            if (_isServerShuttingDown || IsInWarmup()) return HookResult.Continue;
-
-            // Reason 13 = TargetSaved (時間到，CT 守住)
-            // Reason 9 = RoundDraw (平局/超時)
-            if (@event.Reason == 13 || @event.Reason == 9)
-            {
-                HandleTimeoutHealthCheck();
-            }
-
-            return HookResult.Continue;
-        });
 
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
             CheckAndResetGame();
@@ -58,54 +44,28 @@ public class OneVOneReset : BasePlugin
         });
     }
 
-    private void HandleTimeoutHealthCheck()
-    {
-        var ctPlayer = Utilities.GetPlayers().FirstOrDefault(p => p != null && p.IsValid && !p.IsBot && p.TeamNum == 3 && p.PawnIsAlive);
-        var tPlayer = Utilities.GetPlayers().FirstOrDefault(p => p != null && p.IsValid && !p.IsBot && p.TeamNum == 2 && p.PawnIsAlive);
-
-        if (ctPlayer == null || tPlayer == null) return;
-
-        int ctHealth = ctPlayer.PlayerPawn.Value?.Health ?? 0;
-        int tHealth = tPlayer.PlayerPawn.Value?.Health ?? 0;
-
-        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
-        var gameRules = gameRulesProxy?.GameRules;
-        if (gameRules == null || gameRulesProxy == null) return;
-
-        if (ctHealth > tHealth)
-        {
-            // CT 血多：保持原生結算
-        }
-        else if (tHealth > ctHealth)
-        {
-            // T 血多：手動把 T 隊的分數加 1 (陣列索引 2 代表 T隊)
-            gameRules.MatchStats_RoundsTotal[2] += 1;
-            
-            // 💡 修正：傳入 gameRulesProxy (它是 CBaseEntity)，資訊才會正確同步到客戶端
-            Utilities.SetStateChanged(gameRulesProxy, "CCSGameRulesProxy", "m_pGameRules"); 
-        }
-    }
-
     private void CheckAndResetGame()
     {
+        // 延遲 1.0 秒，確保遊戲引擎數據與離線狀態同步更新
         AddTimer(1.0f, () => {
             if (_isServerShuttingDown) return;
             if (IsInWarmup()) return;
 
-            var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
-            var gameRules = gameRulesProxy?.GameRules;
+            // 💡 針對「個人 30 勝」的精準核心判定
+            var gameRules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
             if (gameRules != null)
             {
-                // 💡 修正：從正確的 MatchStats 陣列中抓取兩隊得分 (索引 2 是 T，索引 3 是 CT)
-                int tScore = gameRules.MatchStats_RoundsTotal[2];
-                int ctScore = gameRules.MatchStats_RoundsTotal[3];
+                int ctScore = gameRules.CTScore;
+                int tScore = gameRules.TScore;
 
+                // 🎯 只要有任何一方的分數『大於或等於 30 分』，代表比賽已經正常打完結束
                 if (ctScore >= 30 || tScore >= 30)
                 {
-                    return; 
+                    return; // 正常打完，直接跳出，把結算留給遊戲引擎
                 }
             }
 
+            // 如果雙方都還沒拿到 30 勝，卻有人離開，才判定為「中途離場」
             int activePlayers = Utilities.GetPlayers().Count(p => 
                 p != null && 
                 p.IsValid && 
@@ -114,12 +74,12 @@ public class OneVOneReset : BasePlugin
                 (p.TeamNum == 2 || p.TeamNum == 3)
             );
 
+            // 正式比賽中途離場（人數少於 2 人），強制清理殘留數據並回到凍結暖身
             if (activePlayers < 2)
             {
                 Server.ExecuteCommand("mp_warmup_start");
                 Server.ExecuteCommand("mp_warmup_pausetimer 1");
-                
-                Console.WriteLine($"[1V1重置 Log] 比賽中途離場，重置凍結暖身。");
+
             }
         });
     }
