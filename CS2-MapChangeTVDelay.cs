@@ -10,7 +10,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "2.2.0"; // 升級版本號
+    public override string ModuleVersion => "2.2.1"; // 微調版本號
 
     private bool _isServerShuttingDown = false; 
 
@@ -105,12 +105,11 @@ public class OneVOneReset : BasePlugin
         string nameColor = $"{ChatColors.White}";
 
         if (player.TeamNum == 1) nameColor = $"{ChatColors.Grey}";       
-        else if (player.TeamNum == 2) nameColor = $"\x10";               
-        else if (player.TeamNum == 3) nameColor = $"\x0B";               
+        else if (player.TeamNum == 2) nameColor = $"\x10";                
+        else if (player.TeamNum == 3) nameColor = $"\x0B";                
 
         Server.PrintToChatAll($"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}");
-        string teamLabel = player.TeamNum == 1 ? "Spec" : (player.TeamNum == 2 ? "TS" : "CT");
-        Console.WriteLine($"[{teamLabel}]{playerName}：{message}");
+
         return HookResult.Handled;
     }
 
