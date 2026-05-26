@@ -119,8 +119,9 @@ public class OneVOneReset : BasePlugin
             {
                 Server.ExecuteCommand("mp_warmup_start");
                 Server.ExecuteCommand("mp_warmup_pausetimer 1");
+                Server.ExecuteCommand("mp_restartgame 1");
                 
-                Console.WriteLine($"[1V1重置 Log] 比賽中途離場，已強制重置凍結暖身。");
+                Console.WriteLine($"[1V1重置 Log] 比賽中途離場，重置凍結暖身。");
             }
         });
     }
