@@ -2,15 +2,18 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Core.Attributes;
+using CounterStrikeSharp.API.Modules.Timers;
 using System;
 using System.Linq; 
 
 namespace OneVOneReset;
 
+[MinimumApiVersion(369)] // 對齊 .NET 10 / CSS 最新底層要求
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "2.2.5"; // 微調版本號
+    public override string ModuleVersion => "2.2.6"; // 升級版本號
 
     private bool _isServerShuttingDown = false; 
 
@@ -28,14 +31,21 @@ public class OneVOneReset : BasePlugin
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
 
-        // 監聽玩家斷線與換隊
+        // 監聽玩家斷線：把觸發玩家傳進去，做到「即時扣除判定」
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
-            CheckAndResetGame();
+            if (@event?.Userid is not null)
+            {
+                CheckAndResetGameImmediate(@event.Userid);
+            }
             return HookResult.Continue;
         });
 
+        // 監聽玩家換隊：把觸發玩家傳進去，做到「即時扣除判定」
         RegisterEventHandler<EventPlayerTeam>((@event, info) => {
-            CheckAndResetGame();
+            if (@event?.Userid is not null)
+            {
+                CheckAndResetGameImmediate(@event.Userid);
+            }
             return HookResult.Continue;
         });
 
@@ -45,49 +55,44 @@ public class OneVOneReset : BasePlugin
         });
     }
 
-    private void CheckAndResetGame()
+    /// <summary>
+    /// 【核心優化】即時精準判定：不等 1.0 秒，直接在玩家動作的當下進行預判
+    /// </summary>
+    private void CheckAndResetGameImmediate(CCSPlayerController triggeringPlayer)
     {
-        // 延遲 1.0 秒，確保引擎與離線狀態更新
-        AddTimer(1.0f, () => {
+        // 在下一幀立刻處理，避開事件衝突，且快到不可能被補位卡掉
+        Server.NextFrame(() => {
             if (_isServerShuttingDown) return;
             if (IsInWarmup()) return;
 
-            // 核心改動：直接上網撈地圖上的隊伍實體 (CCSTeam)
+            // 1. 檢查是否正常完賽（30勝跳出）
             var teams = Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager");
-            if (teams != null)
+            if (teams is not null)
             {
-                // TeamNum 2 是 T 隊，TeamNum 3 是 CT 隊
                 var tTeam = teams.FirstOrDefault(t => t.TeamNum == 2);
                 var ctTeam = teams.FirstOrDefault(t => t.TeamNum == 3);
 
-                if (tTeam != null && ctTeam != null)
+                if (tTeam is not null && ctTeam is not null)
                 {
-                    int tScore = tTeam.Score;
-                    int ctScore = ctTeam.Score;
-
-                    // 如果有人到了 30 勝，這是正常完賽，直接跳出不重置！
-                    if (ctScore >= 30 || tScore >= 30)
-                    {
-                        return; 
-                    }
+                    if (ctTeam.Score >= 30 || tTeam.Score >= 30) return; 
                 }
             }
 
-            // 統計目前在 T(2) 與 CT(3) 的真實對戰玩家人數
+            // 2. 統計場上人數，但「直接扣除」剛才觸發斷線或跳觀戰的那個玩家
             int activePlayers = Utilities.GetPlayers().Count(p => 
-                p != null && 
+                p is not null && 
                 p.IsValid && 
                 !p.IsBot && 
                 p.SteamID > 0 && 
+                p.UserId != triggeringPlayer.UserId && // 
                 (p.TeamNum == 2 || p.TeamNum == 3)
             );
 
-            // 正式比賽未完結且打球人數少於 2 人，判定為中途離場
+            // 如果扣掉他之後，對戰人數少於 2 人，代表即將演變成空場或獨狼，秒速重置暖場！
             if (activePlayers < 2)
             {
                 Server.ExecuteCommand("mp_warmup_start");
                 Server.ExecuteCommand("mp_warmup_pausetimer 1");
-                
                 Console.WriteLine($"[1V1重置] 中途離場，重置暖身。");
             }
         });
@@ -95,7 +100,9 @@ public class OneVOneReset : BasePlugin
 
     private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     {
-        if (_isServerShuttingDown || player == null || !player.IsValid) return HookResult.Continue;
+        if (_isServerShuttingDown || player is null || !player.IsValid) 
+            return HookResult.Continue;
+
         string message = info.GetArg(1).Trim(); 
         string playerName = player.PlayerName;
         if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
@@ -110,21 +117,18 @@ public class OneVOneReset : BasePlugin
 
         string formattedMessage = $"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}";
 
-        // 這裡改成巡迴發送給每個人，繞過官方 Server.PrintToChatAll 導致的黑視窗二次轉發副作用！
-        var allPlayers = Utilities.GetPlayers().Where(p => p != null && p.IsValid && !p.IsBot);
+        var allPlayers = Utilities.GetPlayers().Where(p => p is not null && p.IsValid && !p.IsBot);
         foreach (var p in allPlayers)
         {
             p.PrintToChat(formattedMessage);
         }
-
-        // 這裡原本多餘的 Console.WriteLine 與 teamLabel 已被徹底拔除，不再吃硬碟與主機效能！
 
         return HookResult.Handled;
     }
 
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
     {
-        if (player == null || !player.IsValid) return;
+        if (player is null || !player.IsValid) return;
         player.PrintToChat($" {ChatColors.Orange}您 可 在 聊 天 欄 位 輸 入 您 要 的 武器，以 下 是 常 用 武器");
         player.PrintToChat($" ----------------------------------------------------------------------");
         player.PrintToChat($" [ {ChatColors.LightBlue}手槍{ChatColors.White} ]  {ChatColors.LightBlue}!dg {ChatColors.White}[ 沙鷹 ] 、{ChatColors.LightBlue}!usp {ChatColors.White}[ USP ] 、{ChatColors.LightBlue}!gk {ChatColors.White}[ 格洛克 ] 、{ChatColors.LightBlue}!r8 {ChatColors.White}[ R8 ]");
