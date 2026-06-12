@@ -9,11 +9,11 @@ using System.Linq;
 
 namespace OneVOneReset;
 
-[MinimumApiVersion(369)] // 對齊 .NET 10 / CSS 最新底層要求
+[MinimumApiVersion(369)]
 public class OneVOneReset : BasePlugin
 {
-    public override string ModuleName => "1V1 武器提示與聊天顯示";
-    public override string ModuleVersion => "2.2.6"; // 升級版本號
+    public override string ModuleName => "1V1 武器提示與中途離場重置";
+    public override string ModuleVersion => "2.2.8"; // 升級版本號
 
     private bool _isServerShuttingDown = false; 
 
@@ -29,23 +29,17 @@ public class OneVOneReset : BasePlugin
 
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
         AddCommandListener("say", OnPlayerSay);
-        AddCommandListener("say_team", OnPlayerSay);
+        AddCommandListener("say_team", OnPlayerSay); // 保留你原本的設定：攔截隊伍頻道
 
-        // 監聽玩家斷線：把觸發玩家傳進去，做到「即時扣除判定」
+        // 🛡️ 【修正 1：防崩潰】不再傳入會變成「幽靈實體」的玩家參數
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
-            if (@event?.Userid is not null)
-            {
-                CheckAndResetGameImmediate(@event.Userid);
-            }
+            CheckAndResetGameImmediate();
             return HookResult.Continue;
         });
 
-        // 監聽玩家換隊：把觸發玩家傳進去，做到「即時扣除判定」
+        // 🛡️ 【修正 2：防誤判】換隊事件同樣直接呼叫無參數的盤點機制
         RegisterEventHandler<EventPlayerTeam>((@event, info) => {
-            if (@event?.Userid is not null)
-            {
-                CheckAndResetGameImmediate(@event.Userid);
-            }
+            CheckAndResetGameImmediate();
             return HookResult.Continue;
         });
 
@@ -56,11 +50,11 @@ public class OneVOneReset : BasePlugin
     }
 
     /// <summary>
-    /// 【核心優化】即時精準判定：不等 1.0 秒，直接在玩家動作的當下進行預判
+    /// 【核心優化】即時精準判定：依賴伺服器下一幀的「絕對真實狀態」，不手動扣除
     /// </summary>
-    private void CheckAndResetGameImmediate(CCSPlayerController triggeringPlayer)
+    private void CheckAndResetGameImmediate()
     {
-        // 在下一幀立刻處理，避開事件衝突，且快到不可能被補位卡掉
+        // 在下一幀立刻處理，避開事件衝突，此時斷線玩家已經消失，換隊玩家也已經就定位！
         Server.NextFrame(() => {
             if (_isServerShuttingDown) return;
             if (IsInWarmup()) return;
@@ -78,17 +72,15 @@ public class OneVOneReset : BasePlugin
                 }
             }
 
-            // 2. 統計場上人數，但「直接扣除」剛才觸發斷線或跳觀戰的那個玩家
+            // 2. 🛡️ 【修正 3：絕對盤點】統計當下「真正」在場上的人數（不再手動排除 triggeringPlayer）
             int activePlayers = Utilities.GetPlayers().Count(p => 
                 p is not null && 
                 p.IsValid && 
                 !p.IsBot && 
-                p.SteamID > 0 && 
-                p.UserId != triggeringPlayer.UserId && // 
-                (p.TeamNum == 2 || p.TeamNum == 3)
+                (p.TeamNum == 2 || p.TeamNum == 3) // 只要是 CT(3) 或 T(2) 就加進來算
             );
 
-            // 如果扣掉他之後，對戰人數少於 2 人，代表即將演變成空場或獨狼，秒速重置暖場！
+            // 如果對戰人數少於 2 人，代表真的有人離開演變成空場或獨狼，秒速重置暖場！
             if (activePlayers < 2)
             {
                 Server.ExecuteCommand("mp_warmup_start");
@@ -117,6 +109,7 @@ public class OneVOneReset : BasePlugin
 
         string formattedMessage = $"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}";
 
+        // 保留你原本的廣播邏輯：將訊息發給全場所有活著的玩家
         var allPlayers = Utilities.GetPlayers().Where(p => p is not null && p.IsValid && !p.IsBot);
         foreach (var p in allPlayers)
         {
