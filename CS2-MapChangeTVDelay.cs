@@ -28,16 +28,13 @@ public class OneVOneReset : BasePlugin
         _isServerShuttingDown = false;
 
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
-        AddCommandListener("say", OnPlayerSay);
-        AddCommandListener("say_team", OnPlayerSay); // 保留你原本的設定：攔截隊伍頻道
 
-        // 🛡️ 【修正 1：防崩潰】不再傳入會變成「幽靈實體」的玩家參數
+        // 防崩潰：正常盤點機制
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
             CheckAndResetGameImmediate();
             return HookResult.Continue;
         });
 
-        // 🛡️ 【修正 2：防誤判】換隊事件同樣直接呼叫無參數的盤點機制
         RegisterEventHandler<EventPlayerTeam>((@event, info) => {
             CheckAndResetGameImmediate();
             return HookResult.Continue;
@@ -54,7 +51,6 @@ public class OneVOneReset : BasePlugin
     /// </summary>
     private void CheckAndResetGameImmediate()
     {
-        // 在下一幀立刻處理，避開事件衝突，此時斷線玩家已經消失，換隊玩家也已經就定位！
         Server.NextFrame(() => {
             if (_isServerShuttingDown) return;
             if (IsInWarmup()) return;
@@ -72,15 +68,15 @@ public class OneVOneReset : BasePlugin
                 }
             }
 
-            // 2. 🛡️ 【修正 3：絕對盤點】統計當下「真正」在場上的人數（不再手動排除 triggeringPlayer）
+            // 2. 統計當下「真正」在場上的人數
             int activePlayers = Utilities.GetPlayers().Count(p => 
                 p is not null && 
                 p.IsValid && 
                 !p.IsBot && 
-                (p.TeamNum == 2 || p.TeamNum == 3) // 只要是 CT(3) 或 T(2) 就加進來算
+                (p.TeamNum == 2 || p.TeamNum == 3) 
             );
 
-            // 如果對戰人數少於 2 人，代表真的有人離開演變成空場或獨狼，秒速重置暖場！
+            // 如果對戰人數少於 2 人，秒速重置暖場！
             if (activePlayers < 2)
             {
                 Server.ExecuteCommand("mp_warmup_start");
@@ -88,35 +84,6 @@ public class OneVOneReset : BasePlugin
                 Console.WriteLine($"[1V1重置] 中途離場，重置暖身。");
             }
         });
-    }
-
-    private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
-    {
-        if (_isServerShuttingDown || player is null || !player.IsValid) 
-            return HookResult.Continue;
-
-        string message = info.GetArg(1).Trim(); 
-        string playerName = player.PlayerName;
-        if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
-        if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
-
-        string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
-        string nameColor = $"{ChatColors.White}";
-
-        if (player.TeamNum == 1) nameColor = $"{ChatColors.Grey}";               
-        else if (player.TeamNum == 2) nameColor = $"\x10";                
-        else if (player.TeamNum == 3) nameColor = $"\x0B";                
-
-        string formattedMessage = $"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}";
-
-        // 保留你原本的廣播邏輯：將訊息發給全場所有活著的玩家
-        var allPlayers = Utilities.GetPlayers().Where(p => p is not null && p.IsValid && !p.IsBot);
-        foreach (var p in allPlayers)
-        {
-            p.PrintToChat(formattedMessage);
-        }
-
-        return HookResult.Handled;
     }
 
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
