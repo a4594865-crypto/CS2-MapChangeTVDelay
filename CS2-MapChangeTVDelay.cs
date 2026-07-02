@@ -4,6 +4,7 @@ using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Modules.Timers;
+using CounterStrikeSharp.API.Modules.Cvars;
 using System;
 using System.Linq; 
 
@@ -13,7 +14,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與中途離場重置";
-    public override string ModuleVersion => "2.2.8"; // 升級版本號
+    public override string ModuleVersion => "2.2.9"; // 升級版本號
 
     private bool _isServerShuttingDown = false; 
 
@@ -53,6 +54,8 @@ public class OneVOneReset : BasePlugin
     {
         Server.NextFrame(() => {
             if (_isServerShuttingDown) return;
+            
+            // 
             if (IsInWarmup()) return;
 
             // 1. 檢查是否正常完賽（30勝跳出）
@@ -79,8 +82,21 @@ public class OneVOneReset : BasePlugin
             // 如果對戰人數少於 2 人，秒速重置暖場！
             if (activePlayers < 2)
             {
+                // 因為最上方已經有 IsInWarmup 攔截，這裡執行 start 是非常安全的
                 Server.ExecuteCommand("mp_warmup_start");
-                Server.ExecuteCommand("mp_warmup_pausetimer 1");
+
+                // 使用 ConVar 直接寫入記憶體，取代 ExecuteCommand 降低伺服器引擎負擔
+                var pauseConVar = ConVar.Find("mp_warmup_pausetimer");
+                if (pauseConVar != null)
+                {
+                    pauseConVar.SetValue(1);
+                }
+                else
+                {
+                    // 萬一伺服器找不到該變數的備援方案
+                    Server.ExecuteCommand("mp_warmup_pausetimer 1");
+                }
+
                 Console.WriteLine($"[1V1重置] 中途離場，重置暖身。");
             }
         });
