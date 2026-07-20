@@ -36,7 +36,7 @@ public class OneVOneReset : BasePlugin
 
         // 【修正】加入時間判斷，如果距離上次觸發不到 2 秒就忽略
         RegisterEventHandler<EventRoundAnnounceMatchStart>((@event, info) => {
-            if ((DateTime.Now - _lastAnnounceTime).TotalSeconds > 5)
+            if ((DateTime.Now - _lastAnnounceTime).TotalSeconds > 3)
             {
                 Console.WriteLine("[1V1單挑] 比 賽 開 始");
                 _lastAnnounceTime = DateTime.Now;
