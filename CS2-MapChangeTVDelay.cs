@@ -31,6 +31,12 @@ public class OneVOneReset : BasePlugin
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay); // 保留你原本的設定：攔截隊伍頻道
 
+        // 【新增】判斷比賽正式開始 (暖身結束，第一回合開始時觸發)
+        RegisterEventHandler<EventRoundAnnounceMatchStart>((@event, info) => {
+            Console.WriteLine("[1V1單挑] 比賽開始");
+            return HookResult.Continue;
+        });
+
         //【修正 1：防崩潰】不再傳入會變成「幽靈實體」的玩家參數
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
             CheckAndResetGameImmediate();
