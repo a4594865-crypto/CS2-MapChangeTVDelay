@@ -14,8 +14,7 @@ namespace OneVOneReset;
 public class OneVOneReset : BasePlugin
 {
     public override string ModuleName => "1V1 武器提示與中途離場重置";
-    public override string ModuleVersion => "2.2.9"; // 升級版本號
-
+    public override string ModuleVersion => "2.2.9";
     private bool _isServerShuttingDown = false; 
 
     private bool IsInWarmup()
@@ -29,13 +28,16 @@ public class OneVOneReset : BasePlugin
         _isServerShuttingDown = false;
 
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
+        AddCommandListener("say", OnPlayerSay);
+        AddCommandListener("say_team", OnPlayerSay); // 保留你原本的設定：攔截隊伍頻道
 
-        // 防崩潰：正常盤點機制
+        //【修正 1：防崩潰】不再傳入會變成「幽靈實體」的玩家參數
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) => {
             CheckAndResetGameImmediate();
             return HookResult.Continue;
         });
 
+        // 修正 2：防誤判】換隊事件同樣直接呼叫無參數的盤點機制
         RegisterEventHandler<EventPlayerTeam>((@event, info) => {
             CheckAndResetGameImmediate();
             return HookResult.Continue;
@@ -52,10 +54,9 @@ public class OneVOneReset : BasePlugin
     /// </summary>
     private void CheckAndResetGameImmediate()
     {
+        // 在下一幀立刻處理，避開事件衝突，此時斷線玩家已經消失，換隊玩家也已經就定位！
         Server.NextFrame(() => {
             if (_isServerShuttingDown) return;
-            
-            // 
             if (IsInWarmup()) return;
 
             // 1. 檢查是否正常完賽（30勝跳出）
@@ -71,21 +72,21 @@ public class OneVOneReset : BasePlugin
                 }
             }
 
-            // 2. 統計當下「真正」在場上的人數
+            // 2. 【修正 3：絕對盤點】統計當下「真正」在場上的人數（不再手動排除 triggeringPlayer）
             int activePlayers = Utilities.GetPlayers().Count(p => 
                 p is not null && 
                 p.IsValid && 
                 !p.IsBot && 
-                (p.TeamNum == 2 || p.TeamNum == 3) 
+                (p.TeamNum == 2 || p.TeamNum == 3) // 只要是 CT(3) 或 T(2) 就加進來算
             );
 
-            // 如果對戰人數少於 2 人，秒速重置暖場！
+            // 如果對戰人數少於 2 人，代表真的有人離開演變成空場或獨狼，秒速重置暖場！
             if (activePlayers < 2)
             {
                 // 因為最上方已經有 IsInWarmup 攔截，這裡執行 start 是非常安全的
                 Server.ExecuteCommand("mp_warmup_start");
 
-                // 使用 ConVar 直接寫入記憶體，取代 ExecuteCommand 降低伺服器引擎負擔
+                // 【效能最佳化】使用 ConVar 直接寫入記憶體，取代 ExecuteCommand 降低伺服器引擎負擔
                 var pauseConVar = ConVar.Find("mp_warmup_pausetimer");
                 if (pauseConVar != null)
                 {
@@ -100,6 +101,35 @@ public class OneVOneReset : BasePlugin
                 Console.WriteLine($"[1V1重置] 中途離場，重置暖身。");
             }
         });
+    }
+
+    private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
+    {
+        if (_isServerShuttingDown || player is null || !player.IsValid) 
+            return HookResult.Continue;
+
+        string message = info.GetArg(1).Trim(); 
+        string playerName = player.PlayerName;
+        if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
+        if (message.StartsWith("!") || message.StartsWith("/")) return HookResult.Continue;
+
+        string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
+        string nameColor = $"{ChatColors.White}";
+
+        if (player.TeamNum == 1) nameColor = $"{ChatColors.Grey}";               
+        else if (player.TeamNum == 2) nameColor = $"\x10";                
+        else if (player.TeamNum == 3) nameColor = $"\x0B";                
+
+        string formattedMessage = $"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}";
+
+        // 保留你原本的廣播邏輯：將訊息發給全場所有活著的玩家
+        var allPlayers = Utilities.GetPlayers().Where(p => p is not null && p.IsValid && !p.IsBot);
+        foreach (var p in allPlayers)
+        {
+            p.PrintToChat(formattedMessage);
+        }
+
+        return HookResult.Handled;
     }
 
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
